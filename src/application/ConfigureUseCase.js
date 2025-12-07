@@ -30,8 +30,18 @@ export class ConfigureUseCase {
     // Collect configuration through prompts
     const answers = await this.prompt.promptConfiguration(existingConfig);
 
-    // Handle API key - keep existing if not provided
+    // Handle API keys - keep existing if not provided
     const anthropicApiKey = answers.anthropicApiKey || existingConfig.anthropicApiKey;
+    const openaiApiKey = answers.openaiApiKey || existingConfig.openaiApiKey;
+    const ollamaHost = answers.ollamaHost || existingConfig.ollamaHost;
+
+    // Determine LLM model - use answer, or keep existing if same provider, or null for default
+    let llmModel = null;
+    if (answers.llmModel) {
+      llmModel = answers.llmModel;
+    } else if (answers.llmProvider === existingConfig.llmProvider) {
+      llmModel = existingConfig.llmModel;
+    }
 
     // Create new configuration
     const newConfig = new Configuration({
@@ -48,8 +58,11 @@ export class ConfigureUseCase {
       recursive: answers.recursive,
       dryRun: answers.dryRun,
       useLlm: answers.useLlm,
+      llmProvider: answers.llmProvider || existingConfig.llmProvider,
       anthropicApiKey: anthropicApiKey,
-      llmModel: answers.llmModel || existingConfig.llmModel,
+      openaiApiKey: openaiApiKey,
+      ollamaHost: ollamaHost,
+      llmModel: llmModel,
     });
 
     // Validate

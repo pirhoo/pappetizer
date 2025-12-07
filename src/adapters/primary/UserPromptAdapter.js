@@ -367,29 +367,83 @@ export class UserPromptAdapter extends UserPromptPort {
     });
 
     answers.useLlm = await confirm({
-      message: `${c.bold}Use LLM${c.reset} ${c.dim}(Claude for better extraction)${c.reset}`,
+      message: `${c.bold}Use LLM${c.reset} ${c.dim}(AI for better extraction)${c.reset}`,
       default: currentConfig.useLlm,
       theme,
     });
 
     if (answers.useLlm) {
-      answers.anthropicApiKey = await password({
-        message: `${c.bold}API key${c.reset} ${c.dim}(leave empty to keep existing)${c.reset}`,
-        mask: '•',
+      answers.llmProvider = await select({
+        message: `${c.bold}LLM Provider${c.reset}`,
+        choices: [
+          { name: `Anthropic   ${c.dim}(Claude)${c.reset}`, value: 'anthropic' },
+          { name: `OpenAI      ${c.dim}(ChatGPT)${c.reset}`, value: 'openai' },
+          { name: `Ollama      ${c.dim}(local)${c.reset}`, value: 'ollama' },
+        ],
+        default: currentConfig.llmProvider || 'anthropic',
         theme,
       });
 
-      answers.llmModel = await select({
-        message: `${c.bold}Model${c.reset}`,
-        choices: [
-          { name: `Claude 3 Haiku      ${c.dim}(fastest)${c.reset}`, value: 'claude-3-haiku-20240307' },
-          { name: `Claude 3.5 Haiku    ${c.dim}(balanced)${c.reset}`, value: 'claude-3-5-haiku-20241022' },
-          { name: `Claude 3.5 Sonnet   ${c.dim}(best quality)${c.reset}`, value: 'claude-3-5-sonnet-20241022' },
-          { name: `Claude Sonnet 4     ${c.dim}(latest)${c.reset}`, value: 'claude-sonnet-4-20250514' },
-        ],
-        default: currentConfig.llmModel,
-        theme,
-      });
+      if (answers.llmProvider === 'anthropic') {
+        answers.anthropicApiKey = await password({
+          message: `${c.bold}Anthropic API key${c.reset} ${c.dim}(leave empty to keep existing)${c.reset}`,
+          mask: '•',
+          theme,
+        });
+
+        answers.llmModel = await select({
+          message: `${c.bold}Model${c.reset}`,
+          choices: [
+            { name: `Claude 3 Haiku      ${c.dim}(fastest)${c.reset}`, value: 'claude-3-haiku-20240307' },
+            { name: `Claude 3.5 Haiku    ${c.dim}(balanced)${c.reset}`, value: 'claude-3-5-haiku-20241022' },
+            { name: `Claude 3.5 Sonnet   ${c.dim}(best quality)${c.reset}`, value: 'claude-3-5-sonnet-20241022' },
+            { name: `Claude Sonnet 4     ${c.dim}(latest)${c.reset}`, value: 'claude-sonnet-4-20250514' },
+          ],
+          default: currentConfig.llmProvider === 'anthropic' ? currentConfig.llmModel : 'claude-3-haiku-20240307',
+          theme,
+        });
+      } else if (answers.llmProvider === 'openai') {
+        answers.openaiApiKey = await password({
+          message: `${c.bold}OpenAI API key${c.reset} ${c.dim}(leave empty to keep existing)${c.reset}`,
+          mask: '•',
+          theme,
+        });
+
+        answers.llmModel = await select({
+          message: `${c.bold}Model${c.reset}`,
+          choices: [
+            { name: `GPT-4o mini         ${c.dim}(fastest)${c.reset}`, value: 'gpt-4o-mini' },
+            { name: `GPT-4o              ${c.dim}(balanced)${c.reset}`, value: 'gpt-4o' },
+            { name: `GPT-4 Turbo         ${c.dim}(best quality)${c.reset}`, value: 'gpt-4-turbo' },
+            { name: `GPT-3.5 Turbo       ${c.dim}(legacy)${c.reset}`, value: 'gpt-3.5-turbo' },
+          ],
+          default: currentConfig.llmProvider === 'openai' ? currentConfig.llmModel : 'gpt-4o-mini',
+          theme,
+        });
+      } else if (answers.llmProvider === 'ollama') {
+        answers.ollamaHost = await input({
+          message: `${c.bold}Ollama host${c.reset}`,
+          default: currentConfig.ollamaHost || 'http://localhost:11434',
+          theme,
+          validate: (value) => {
+            if (!value.trim()) return 'Host is required';
+            if (!value.startsWith('http://') && !value.startsWith('https://')) {
+              return 'Must start with http:// or https://';
+            }
+            return true;
+          },
+        });
+
+        answers.llmModel = await input({
+          message: `${c.bold}Model${c.reset} ${c.dim}(e.g., llama3.2, mistral, codellama)${c.reset}`,
+          default: currentConfig.llmProvider === 'ollama' ? (currentConfig.llmModel || 'llama3.2') : 'llama3.2',
+          theme,
+          validate: (value) => {
+            if (!value.trim()) return 'Model name is required';
+            return true;
+          },
+        });
+      }
     }
 
     return answers;
