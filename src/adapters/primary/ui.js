@@ -186,7 +186,7 @@ export function createSpinner(text = '') {
 
   const render = () => {
     const frame = symbols.spinner[frameIndex];
-    process.stdout.write(`\r${c.cyan}${frame}${c.reset} ${currentText}`);
+    process.stdout.write(`\r  ${c.cyan}${frame}${c.reset} ${currentText}`);
     frameIndex = (frameIndex + 1) % symbols.spinner.length;
   };
 
@@ -207,7 +207,7 @@ export function createSpinner(text = '') {
         clearInterval(interval);
         interval = null;
       }
-      process.stdout.write('\r' + ' '.repeat(stripAnsi(currentText).length + 4) + '\r');
+      process.stdout.write('\r' + ' '.repeat(stripAnsi(currentText).length + 6) + '\r');
     },
 
     success(newText) {
@@ -235,7 +235,7 @@ export function createSpinner(text = '') {
      */
     step(completedText, newText) {
       // Clear current line and show completed step
-      process.stdout.write('\r' + ' '.repeat(stripAnsi(currentText).length + 4) + '\r');
+      process.stdout.write('\r' + ' '.repeat(stripAnsi(currentText).length + 6) + '\r');
       console.log(`  ${c.dim}${symbols.success}${c.reset} ${c.dim}${completedText}${c.reset}`);
       // Update text and continue spinning
       if (newText) {
