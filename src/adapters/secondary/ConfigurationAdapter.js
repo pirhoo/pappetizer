@@ -4,16 +4,25 @@ import os from 'os';
 import { ConfigurationPort } from '../../domain/ports/ConfigurationPort.js';
 import { Configuration } from '../../domain/entities/Configuration.js';
 
-const CONFIG_FILENAME = '.pappetizer.config.json';
+const APP_NAME = 'pappetizer';
+const CONFIG_FILENAME = 'config.json';
+
+/**
+ * Get the XDG config directory
+ * @returns {string}
+ */
+function getXdgConfigHome() {
+  return process.env.XDG_CONFIG_HOME || path.join(os.homedir(), '.config');
+}
 
 /**
  * Configuration adapter for reading/writing config to filesystem
+ * Uses XDG_CONFIG_HOME/pappetizer/config.json
  */
 export class ConfigurationAdapter extends ConfigurationPort {
   constructor(configDir = null) {
     super();
-    // Default to user's home directory
-    this.configDir = configDir || os.homedir();
+    this.configDir = configDir || path.join(getXdgConfigHome(), APP_NAME);
   }
 
   /**
@@ -21,6 +30,13 @@ export class ConfigurationAdapter extends ConfigurationPort {
    */
   getConfigPath() {
     return path.join(this.configDir, CONFIG_FILENAME);
+  }
+
+  /**
+   * Ensure the config directory exists
+   */
+  async ensureConfigDir() {
+    await fs.mkdir(this.configDir, { recursive: true });
   }
 
   /**
@@ -54,6 +70,9 @@ export class ConfigurationAdapter extends ConfigurationPort {
     if (!validation.valid) {
       throw new Error(`Invalid configuration: ${validation.errors.join(', ')}`);
     }
+
+    // Ensure directory exists
+    await this.ensureConfigDir();
 
     const content = JSON.stringify(config.toJSON(), null, 2);
     await fs.writeFile(configPath, content, 'utf-8');
