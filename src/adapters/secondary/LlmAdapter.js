@@ -4,7 +4,7 @@ import { LlmPort } from '../../domain/ports/LlmPort.js';
 /**
  * LLM adapter using Anthropic's Claude API for receipt data extraction
  */
-export class LlmAdapter extends LlmPort {
+export class AnthropicAdapter extends LlmPort {
   constructor(apiKey = null, model = 'claude-3-haiku-20240307') {
     super();
     this.apiKey = apiKey;
@@ -134,3 +134,6 @@ Important rules:
     }
   }
 }
+
+// Backwards compatibility alias
+export { AnthropicAdapter as LlmAdapter };
