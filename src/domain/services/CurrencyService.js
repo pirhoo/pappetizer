@@ -1,8 +1,10 @@
 import currencyCodes from 'currency-codes';
 import countries from 'i18n-iso-countries';
+import { createRequire } from 'module';
 
 // Register English locale for country names
-import enLocale from 'i18n-iso-countries/langs/en.json' with { type: 'json' };
+const require = createRequire(import.meta.url);
+const enLocale = require('i18n-iso-countries/langs/en.json');
 countries.registerLocale(enLocale);
 
 /**
@@ -236,8 +238,6 @@ export class CurrencyService {
    * @returns {string}
    */
   disambiguateDollar(text) {
-    const lowerText = text.toLowerCase();
-
     // Check for specific dollar variants
     if (/\b(cad|canadian|canada|toronto|vancouver|montreal)\b/i.test(text)) return 'CAD';
     if (/\b(aud|australian|australia|sydney|melbourne|brisbane)\b/i.test(text)) return 'AUD';
