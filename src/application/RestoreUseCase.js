@@ -103,7 +103,7 @@ export class RestoreUseCase {
         if (dryRun) {
           this.userPrompt.restored(newName, originalName, true);
         } else {
-          await this.fileSystem.rename(newPath, originalPath);
+          await this.fileSystem.renameFile(newPath, originalPath);
           await this.manifest.removeEntry(dirPath, originalName);
           this.userPrompt.restored(newName, originalName, false);
         }
@@ -164,7 +164,7 @@ export class RestoreUseCase {
       if (dryRun) {
         this.userPrompt.restored(fileName, originalName, true);
       } else {
-        await this.fileSystem.rename(filePath, originalPath);
+        await this.fileSystem.renameFile(filePath, originalPath);
         await this.manifest.removeEntry(dirPath, originalName);
         this.userPrompt.restored(fileName, originalName, false);
       }
