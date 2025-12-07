@@ -11,7 +11,7 @@ function suppressPdfWarnings(fn) {
     console.warn = (...warnArgs) => {
       const msg = warnArgs[0]?.toString() || '';
       // Suppress pdf.js internal warnings (TT font warnings, etc.)
-      if (msg.includes('Warning: TT:') || msg.includes('Warning: Unimplemented')) {
+      if (msg.includes('Warning: TT:') || msg.includes('Warning: Unimplemented') || msg.includes('Warning: Unknown type')) {
         return;
       }
       originalWarn.apply(console, warnArgs);
