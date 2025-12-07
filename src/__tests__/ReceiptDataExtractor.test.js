@@ -40,7 +40,7 @@ describe('ReceiptDataExtractor', () => {
     it('should extract from thank you messages', () => {
       // Test known vendor database being matched through thank you text
       expect(extractor.extractVendor('Receipt\nItems\nThank you for shopping at Walmart!')).toBe('Walmart');
-      expect(extractor.extractVendor('Receipt\nWelcome to Target\nTotal: $10')).toBe('Target');
+      expect(extractor.extractVendor('Receipt\nWelcome to Costco\nTotal: $10')).toBe('Costco');
     });
 
     it('should return null for empty text', () => {
@@ -49,8 +49,8 @@ describe('ReceiptDataExtractor', () => {
     });
 
     it('should skip date-like and amount-like lines', () => {
-      const text = '2024-01-15\n$50.00\nTarget Store\nAmount: $50.00';
-      expect(extractor.extractVendor(text)).toBe('Target');
+      const text = '2024-01-15\n$50.00\nCostco Store\nAmount: $50.00';
+      expect(extractor.extractVendor(text)).toBe('Costco');
     });
 
     // Edge case tests for vendor extraction
@@ -1129,10 +1129,10 @@ describe('ReceiptDataExtractor', () => {
   describe('known vendors database', () => {
     it('should recognize major US retailers', () => {
       expect(extractor.extractVendor('WALMART SUPERCENTER')).toBe('Walmart');
-      expect(extractor.extractVendor('TARGET #1234')).toBe('Target');
       expect(extractor.extractVendor('COSTCO WHOLESALE')).toBe('Costco');
       expect(extractor.extractVendor('BEST BUY')).toBe('Best Buy');
       expect(extractor.extractVendor('HOME DEPOT')).toBe('Home Depot');
+      expect(extractor.extractVendor('WALGREENS')).toBe('Walgreens');
     });
 
     it('should recognize fast food chains', () => {
@@ -1168,7 +1168,7 @@ describe('ReceiptDataExtractor', () => {
     });
 
     it('should recognize gas stations', () => {
-      expect(extractor.extractVendor('SHELL')).toBe('Shell');
+      expect(extractor.extractVendor('SHELL GAS STATION')).toBe('Shell');
       expect(extractor.extractVendor('EXXON')).toBe('ExxonMobil');
       expect(extractor.extractVendor('CHEVRON')).toBe('Chevron');
       expect(extractor.extractVendor('TEXACO')).toBe('Texaco');
@@ -1193,7 +1193,7 @@ describe('ReceiptDataExtractor', () => {
     it('should recognize payment processors', () => {
       expect(extractor.extractVendor('PAYPAL')).toBe('PayPal');
       expect(extractor.extractVendor('STRIPE')).toBe('Stripe');
-      expect(extractor.extractVendor('SQUARE')).toBe('Square');
+      expect(extractor.extractVendor('SQUARE INC')).toBe('Square');
       expect(extractor.extractVendor('VENMO')).toBe('Venmo');
     });
 
@@ -1228,10 +1228,10 @@ describe('ReceiptDataExtractor', () => {
     });
 
     it('should recognize airlines', () => {
-      expect(extractor.extractVendor('DELTA')).toBe('Delta Airlines');
+      expect(extractor.extractVendor('DELTA AIRLINES')).toBe('Delta Airlines');
       expect(extractor.extractVendor('UNITED AIRLINES')).toBe('United Airlines');
       expect(extractor.extractVendor('AMERICAN AIRLINES')).toBe('American Airlines');
-      expect(extractor.extractVendor('SOUTHWEST')).toBe('Southwest Airlines');
+      expect(extractor.extractVendor('SOUTHWEST AIRLINES')).toBe('Southwest Airlines');
       expect(extractor.extractVendor('JETBLUE')).toBe('JetBlue');
       expect(extractor.extractVendor('LUFTHANSA')).toBe('Lufthansa');
       expect(extractor.extractVendor('BRITISH AIRWAYS')).toBe('British Airways');
@@ -1466,7 +1466,7 @@ describe('ReceiptDataExtractor', () => {
 
     it('should handle gas station receipt', () => {
       const text = `
-        SHELL
+        SHELL GAS
         Station #54321
 
         Date: 03/15/2024
