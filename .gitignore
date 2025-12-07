@@ -3,3 +3,4 @@ coverage/
 .pappetizer.json
 *.log
 .DS_Store
+*.traineddata
