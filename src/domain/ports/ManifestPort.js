@@ -71,4 +71,23 @@ export class ManifestPort {
   async initialize(_dirPath) {
     throw new Error('Method not implemented');
   }
+
+  /**
+   * Remove a rename entry from the manifest
+   * @param {string} _dirPath - Directory path
+   * @param {string} _originalName - Original filename (key)
+   * @returns {Promise<boolean>} - True if entry was removed
+   */
+  async removeEntry(_dirPath, _originalName) {
+    throw new Error('Method not implemented');
+  }
+
+  /**
+   * Get all rename entries for a directory
+   * @param {string} _dirPath - Directory path
+   * @returns {Promise<Array<object>>} - Array of rename entries
+   */
+  async getAllEntries(_dirPath) {
+    throw new Error('Method not implemented');
+  }
 }
