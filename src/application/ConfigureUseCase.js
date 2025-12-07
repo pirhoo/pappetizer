@@ -44,8 +44,7 @@ export class ConfigureUseCase {
       supportedExtensions: this.parseExtensions(answers.supportedExtensions),
       ocrLanguage: answers.ocrLanguage,
       minFileSize: parseInt(answers.minFileSize, 10),
-      vendorAliases: existingConfig.vendorAliases, // Keep existing aliases
-      skipDirectories: this.parseList(answers.skipDirectories),
+      skipDirectories: existingConfig.skipDirectories, // Keep existing
       recursive: answers.recursive,
       dryRun: answers.dryRun,
       useLlm: answers.useLlm,
