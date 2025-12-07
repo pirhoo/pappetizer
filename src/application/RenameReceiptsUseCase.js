@@ -41,6 +41,7 @@ export class RenameReceiptsUseCase {
     const autoAccept = options.yes ?? this.config.autoAcceptAll;
     const recursive = options.recursive ?? this.config.recursive;
     const supportedExtensions = this.config.supportedExtensions;
+    const minConfidence = options.minConfidence ?? this.config.minConfidence;
 
     let acceptAllInDir = autoAccept ? 'all' : null;
 
@@ -129,15 +130,65 @@ export class RenameReceiptsUseCase {
           let shouldRename = false;
           let finalReceipt = receipt;
 
-          if (acceptAllInDir === currentDir || acceptAllInDir === 'all') {
-            // Auto-accept for this directory or globally
+          // Check if we can auto-accept based on confidence threshold
+          const meetsConfidenceThreshold = receipt.confidence >= minConfidence;
+
+          if ((acceptAllInDir === currentDir || acceptAllInDir === 'all') && meetsConfidenceThreshold) {
+            // Auto-accept for this directory or globally (only if confidence is high enough)
             shouldRename = true;
+          } else if ((acceptAllInDir === currentDir || acceptAllInDir === 'all') && !meetsConfidenceThreshold) {
+            // Auto-accept mode but confidence is too low - prompt user
+            this.userPrompt.warn(`Low confidence (${(receipt.confidence * 100).toFixed(0)}%) - prompting for review`);
+            const extractedData = {
+              vendor: receipt.vendor,
+              date: receipt.date,
+              amount: receipt.amount,
+              currency: receipt.currency,
+              confidence: receipt.confidence,
+            };
+            const response = await this.userPrompt.promptForRename(originalName, suggestedName, extractedData);
+
+            switch (response.action) {
+            case 'accept':
+            case 'acceptAll':
+              shouldRename = true;
+              break;
+            case 'editFields':
+              if (this.memory && response.editedFields.vendor !== undefined && response.editedFields.vendor !== receipt.vendor) {
+                await this.memory.recordVendorAlias(receipt.vendor, response.editedFields.vendor);
+              }
+              finalReceipt = new Receipt({
+                filePath,
+                originalName,
+                vendor: response.editedFields.vendor !== undefined ? response.editedFields.vendor : receipt.vendor,
+                date: response.editedFields.date !== undefined ? response.editedFields.date : receipt.date,
+                amount: response.editedFields.amount !== undefined ? response.editedFields.amount : receipt.amount,
+                currency: response.editedFields.currency !== undefined ? response.editedFields.currency : receipt.currency,
+                confidence: receipt.confidence,
+              });
+              finalName = finalReceipt.generateFilename({
+                dateFormat: this.config.dateFormat,
+                nameSeparator: this.config.nameSeparator,
+                nameTemplate: this.config.nameTemplate,
+                defaultCurrency: this.config.defaultCurrency,
+              });
+              shouldRename = true;
+              break;
+            case 'manual':
+              finalName = response.customName;
+              shouldRename = true;
+              break;
+            case 'skip':
+              stats.skipped++;
+              continue;
+            }
           } else {
             const extractedData = {
               vendor: receipt.vendor,
               date: receipt.date,
               amount: receipt.amount,
               currency: receipt.currency,
+              confidence: receipt.confidence,
             };
             const response = await this.userPrompt.promptForRename(originalName, suggestedName, extractedData);
 
@@ -162,6 +213,7 @@ export class RenameReceiptsUseCase {
                 date: response.editedFields.date !== undefined ? response.editedFields.date : receipt.date,
                 amount: response.editedFields.amount !== undefined ? response.editedFields.amount : receipt.amount,
                 currency: response.editedFields.currency !== undefined ? response.editedFields.currency : receipt.currency,
+                confidence: receipt.confidence,
               });
               finalName = finalReceipt.generateFilename({
                 dateFormat: this.config.dateFormat,
@@ -232,6 +284,7 @@ export class RenameReceiptsUseCase {
     const dryRun = options.dryRun ?? this.config.dryRun;
     const autoAccept = options.yes ?? this.config.autoAcceptAll;
     const supportedExtensions = this.config.supportedExtensions;
+    const minConfidence = options.minConfidence ?? this.config.minConfidence;
 
     const ext = this.fileSystem.getExtension(filePath);
 
@@ -301,14 +354,64 @@ export class RenameReceiptsUseCase {
       let shouldRename = false;
       let finalReceipt = receipt;
 
-      if (autoAccept) {
+      // Check if we can auto-accept based on confidence threshold
+      const meetsConfidenceThreshold = receipt.confidence >= minConfidence;
+
+      if (autoAccept && meetsConfidenceThreshold) {
         shouldRename = true;
+      } else if (autoAccept && !meetsConfidenceThreshold) {
+        // Auto-accept mode but confidence is too low - prompt user
+        this.userPrompt.warn(`Low confidence (${(receipt.confidence * 100).toFixed(0)}%) - prompting for review`);
+        const extractedData = {
+          vendor: receipt.vendor,
+          date: receipt.date,
+          amount: receipt.amount,
+          currency: receipt.currency,
+          confidence: receipt.confidence,
+        };
+        const response = await this.userPrompt.promptForRename(originalName, suggestedName, extractedData);
+
+        switch (response.action) {
+        case 'accept':
+        case 'acceptAll':
+          shouldRename = true;
+          break;
+        case 'editFields':
+          if (this.memory && response.editedFields.vendor !== undefined && response.editedFields.vendor !== receipt.vendor) {
+            await this.memory.recordVendorAlias(receipt.vendor, response.editedFields.vendor);
+          }
+          finalReceipt = new Receipt({
+            filePath,
+            originalName,
+            vendor: response.editedFields.vendor !== undefined ? response.editedFields.vendor : receipt.vendor,
+            date: response.editedFields.date !== undefined ? response.editedFields.date : receipt.date,
+            amount: response.editedFields.amount !== undefined ? response.editedFields.amount : receipt.amount,
+            currency: response.editedFields.currency !== undefined ? response.editedFields.currency : receipt.currency,
+            confidence: receipt.confidence,
+          });
+          finalName = finalReceipt.generateFilename({
+            dateFormat: this.config.dateFormat,
+            nameSeparator: this.config.nameSeparator,
+            nameTemplate: this.config.nameTemplate,
+            defaultCurrency: this.config.defaultCurrency,
+          });
+          shouldRename = true;
+          break;
+        case 'manual':
+          finalName = response.customName;
+          shouldRename = true;
+          break;
+        case 'skip':
+          result.skipped = true;
+          return result;
+        }
       } else {
         const extractedData = {
           vendor: receipt.vendor,
           date: receipt.date,
           amount: receipt.amount,
           currency: receipt.currency,
+          confidence: receipt.confidence,
         };
         const response = await this.userPrompt.promptForRename(originalName, suggestedName, extractedData);
 
@@ -329,6 +432,7 @@ export class RenameReceiptsUseCase {
             date: response.editedFields.date !== undefined ? response.editedFields.date : receipt.date,
             amount: response.editedFields.amount !== undefined ? response.editedFields.amount : receipt.amount,
             currency: response.editedFields.currency !== undefined ? response.editedFields.currency : receipt.currency,
+            confidence: receipt.confidence,
           });
           finalName = finalReceipt.generateFilename({
             dateFormat: this.config.dateFormat,
@@ -432,11 +536,13 @@ export class RenameReceiptsUseCase {
 
     // Use LLM for extraction if available, with fallback to heuristics
     let extracted;
+    let usedLlm = false;
     if (this.llm && this.llm.isAvailable()) {
       try {
         // Pass vendor aliases to LLM for context
         const vendorAliases = this.memory ? this.memory.getVendorAliases() : {};
         extracted = await this.llm.extractReceiptData(text, vendorAliases);
+        usedLlm = true;
         // If LLM returns incomplete data, fill in gaps with heuristic extraction
         const heuristicExtracted = this.dataExtractor.extract(text);
         extracted = {
@@ -448,12 +554,13 @@ export class RenameReceiptsUseCase {
       } catch (error) {
         this.userPrompt.warn(`LLM extraction failed: ${error.message}. Falling back to heuristics.`);
         extracted = this.dataExtractor.extract(text);
+        usedLlm = false;
       }
     } else {
       extracted = this.dataExtractor.extract(text);
     }
 
-    return new Receipt({
+    const receipt = new Receipt({
       filePath,
       originalName,
       vendor: extracted.vendor,
@@ -461,5 +568,10 @@ export class RenameReceiptsUseCase {
       amount: extracted.amount,
       currency: extracted.currency,
     });
+
+    // Calculate and set confidence score
+    receipt.confidence = receipt.calculateConfidence({ usedLlm });
+
+    return receipt;
   }
 }
