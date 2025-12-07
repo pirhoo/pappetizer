@@ -11,7 +11,7 @@ import { OcrAdapter } from './adapters/secondary/OcrAdapter.js';
 import { PdfReaderAdapter } from './adapters/secondary/PdfReaderAdapter.js';
 import { ManifestAdapter } from './adapters/secondary/ManifestAdapter.js';
 import { ConfigurationAdapter } from './adapters/secondary/ConfigurationAdapter.js';
-import { LlmAdapter } from './adapters/secondary/LlmAdapter.js';
+import { LlmAdapterFactory } from './adapters/secondary/LlmAdapterFactory.js';
 import { MemoryAdapter } from './adapters/secondary/MemoryAdapter.js';
 import { UserPromptAdapter } from './adapters/primary/UserPromptAdapter.js';
 import {
@@ -112,7 +112,10 @@ function printFlags(flags) {
   if (flags.dryRun) activeFlags.push(badge('DRY RUN', 'warning'));
   if (flags.recursive) activeFlags.push(badge('RECURSIVE', 'info'));
   if (flags.watch) activeFlags.push(badge('WATCH', 'primary'));
-  if (flags.llm) activeFlags.push(badge('LLM', 'success'));
+  if (flags.llm) {
+    const providerName = flags.llmProvider ? flags.llmProvider.toUpperCase() : 'LLM';
+    activeFlags.push(badge(providerName, 'success'));
+  }
   if (flags.yes) activeFlags.push(badge('AUTO', 'default'));
   if (flags.force) activeFlags.push(badge('FORCE', 'warning'));
 
@@ -221,10 +224,12 @@ program
   .option('-w, --watch', 'Watch directory for new files and process them automatically')
   .option('--dry-run', 'Show what would be renamed without actually renaming')
   .option('-y, --yes', 'Auto-accept all suggestions without prompting')
-  .option('--api-key <key>', 'Anthropic API key for LLM extraction (overrides config)')
-  .option('--use-llm', 'Enable LLM extraction (requires API key)')
+  .option('--use-llm', 'Enable LLM extraction')
   .option('--no-llm', 'Disable LLM extraction even if configured')
-  .option('--model <model>', 'LLM model to use (e.g., claude-3-haiku-20240307)')
+  .option('--llm-provider <provider>', 'LLM provider: anthropic, openai, or ollama')
+  .option('--api-key <key>', 'API key for Anthropic or OpenAI (overrides config)')
+  .option('--ollama-host <url>', 'Ollama server URL (default: http://localhost:11434)')
+  .option('--model <model>', 'LLM model to use (provider-specific)')
   .option('--min-confidence <value>', 'Minimum confidence (0-1) for auto-rename with --yes (default: 0.7)', parseFloat)
   .option('-f, --force', 'Re-process files even if already in manifest')
   .action(async (targetPath, options) => {
@@ -237,10 +242,6 @@ program
     const configAdapter = new ConfigurationAdapter();
     const configuration = await configAdapter.loadOrDefault();
 
-    // Determine LLM settings (CLI options override config)
-    const apiKey = options.apiKey || process.env.ANTHROPIC_API_KEY || configuration.anthropicApiKey;
-    const llmModel = options.model || configuration.llmModel;
-
     // Determine if LLM should be used
     let useLlm = configuration.useLlm;
     if (options.useLlm) {
@@ -249,12 +250,44 @@ program
       useLlm = false;
     }
 
+    // Determine LLM provider (CLI options override config)
+    const llmProvider = options.llmProvider || configuration.llmProvider || 'anthropic';
+
+    // Determine API key based on provider
+    let apiKey = options.apiKey;
+    if (!apiKey) {
+      if (llmProvider === 'anthropic') {
+        apiKey = process.env.ANTHROPIC_API_KEY || configuration.anthropicApiKey;
+      } else if (llmProvider === 'openai') {
+        apiKey = process.env.OPENAI_API_KEY || configuration.openaiApiKey;
+      }
+    }
+
+    // Determine Ollama host
+    const ollamaHost = options.ollamaHost || process.env.OLLAMA_HOST || configuration.ollamaHost;
+
+    // Determine model
+    const llmModel = options.model || configuration.llmModel;
+
     // Create LLM adapter if enabled
     let llmAdapter = null;
-    if (useLlm && apiKey) {
-      llmAdapter = new LlmAdapter(apiKey, llmModel);
-    } else if (useLlm && !apiKey) {
-      userPrompt.warn('LLM requested but no API key provided. Using heuristics.');
+    if (useLlm) {
+      llmAdapter = LlmAdapterFactory.create({
+        provider: llmProvider,
+        apiKey,
+        host: ollamaHost,
+        model: llmModel,
+      });
+
+      if (!llmAdapter || !llmAdapter.isAvailable()) {
+        if (llmProvider === 'ollama') {
+          // Ollama doesn't require API key, just host
+          // Adapter will fail gracefully if server unavailable
+        } else {
+          userPrompt.warn(`LLM requested but no API key provided for ${llmProvider}. Using heuristics.`);
+          llmAdapter = null;
+        }
+      }
     }
 
     // Print active flags
@@ -263,6 +296,7 @@ program
       recursive: options.recursive,
       watch: options.watch,
       llm: llmAdapter !== null,
+      llmProvider: llmAdapter ? llmProvider : null,
       yes: options.yes,
       force: options.force,
     });
@@ -432,6 +466,8 @@ program.addHelpText('afterAll', () => {
   console.log(`    $ ${APP_NAME} clean ./receipts --dry-run`);
   console.log(`    $ ${APP_NAME} clean ./receipts -r -y`);
   console.log(`    $ ${APP_NAME} clean ./receipts --watch`);
+  console.log(`    $ ${APP_NAME} clean ./receipts --use-llm --llm-provider openai`);
+  console.log(`    $ ${APP_NAME} clean ./receipts --use-llm --llm-provider ollama --model llama3.2`);
   console.log(`    $ ${APP_NAME} restore ./receipts`);
   console.log(`    $ ${APP_NAME} restore ./receipts -y`);
   console.log(`    $ ${APP_NAME} configure`);
