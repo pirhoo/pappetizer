@@ -5,6 +5,7 @@ import path from 'path';
 import fs from 'fs';
 import { RenameReceiptsUseCase } from './application/RenameReceiptsUseCase.js';
 import { ConfigureUseCase } from './application/ConfigureUseCase.js';
+import { RestoreUseCase } from './application/RestoreUseCase.js';
 import { FileSystemAdapter } from './adapters/secondary/FileSystemAdapter.js';
 import { OcrAdapter } from './adapters/secondary/OcrAdapter.js';
 import { PdfReaderAdapter } from './adapters/secondary/PdfReaderAdapter.js';
@@ -115,6 +116,110 @@ program
       await useCase.execute();
     } catch (error) {
       promptAdapter.error(`Configuration failed: ${error.message}`);
+      process.exit(1);
+    }
+  });
+
+// Restore subcommand
+program
+  .command('restore')
+  .description('Restore renamed files to their original names')
+  .argument('[path]', 'Directory or file to restore', '.')
+  .option('-v, --verbose', 'Enable verbose output')
+  .option('-r, --recursive', 'Process subdirectories recursively')
+  .option('--dry-run', 'Show what would be restored without actually restoring')
+  .option('-y, --yes', 'Auto-accept all restorations without prompting')
+  .action(async (targetPath, options) => {
+    const resolvedPath = path.resolve(targetPath);
+    const userPrompt = new UserPromptAdapter();
+
+    printHeader();
+
+    // Check if path exists
+    let isFile = false;
+    try {
+      const stat = fs.statSync(resolvedPath);
+      isFile = stat.isFile();
+    } catch {
+      userPrompt.error(`Path not found: ${resolvedPath}`);
+      process.exit(1);
+    }
+
+    // Show path
+    console.log(`  ${c.dim}${isFile ? 'File' : 'Directory'}${c.reset}  ${resolvedPath}`);
+    console.log('');
+
+    // Print active flags
+    const activeFlags = [];
+    if (options.dryRun) activeFlags.push(badge('DRY RUN', 'warning'));
+    if (options.recursive) activeFlags.push(badge('RECURSIVE', 'info'));
+    if (options.yes) activeFlags.push(badge('AUTO', 'default'));
+
+    if (activeFlags.length > 0) {
+      console.log(`  ${activeFlags.join(' ')}`);
+      console.log('');
+    }
+
+    const fileSystemAdapter = new FileSystemAdapter();
+    const manifestAdapter = new ManifestAdapter();
+
+    const useCase = new RestoreUseCase({
+      fileSystemAdapter,
+      manifestAdapter,
+      userPromptAdapter: userPrompt,
+    });
+
+    const executeOptions = {
+      dryRun: options.dryRun,
+      yes: options.yes,
+      recursive: options.recursive,
+    };
+
+    try {
+      if (isFile) {
+        const result = await useCase.restoreFile(resolvedPath, executeOptions);
+        if (result.error) {
+          userPrompt.error(result.error);
+          process.exit(1);
+        }
+
+        console.log('');
+        if (result.restored) {
+          console.log(`  ${c.green}${symbols.success}${c.reset} File restored successfully`);
+        } else {
+          console.log(`  ${c.dim}No changes made${c.reset}`);
+        }
+      } else {
+        const stats = await useCase.execute(resolvedPath, executeOptions);
+
+        // Print summary
+        console.log('');
+        console.log(`  ${c.bold}Summary${c.reset}`);
+        console.log('');
+
+        const statsLine = [
+          `${c.green}Restored${c.reset} ${c.bold}${stats.restored}${c.reset}`,
+          `${c.dim}Skipped${c.reset} ${stats.skipped}`,
+        ];
+
+        if (stats.errors.length > 0) {
+          statsLine.push(`${c.red}Errors${c.reset} ${stats.errors.length}`);
+        }
+
+        console.log(`  ${statsLine.join('  ${c.dim}│${c.reset}  ')}`);
+
+        if (stats.errors.length > 0 && options.verbose) {
+          console.log('');
+          console.log(`  ${c.bold}${c.red}Errors${c.reset}`);
+          for (const error of stats.errors) {
+            console.log(`  ${c.red}${symbols.error}${c.reset} ${error}`);
+          }
+        }
+      }
+
+      console.log('');
+    } catch (error) {
+      userPrompt.error(`Restore failed: ${error.message}`);
       process.exit(1);
     }
   });
@@ -354,6 +459,8 @@ program.addHelpText('afterAll', () => {
   console.log(`    $ ${APP_NAME} clean ./receipts --dry-run`);
   console.log(`    $ ${APP_NAME} clean ./receipts -r -y`);
   console.log(`    $ ${APP_NAME} clean ./receipts --watch`);
+  console.log(`    $ ${APP_NAME} restore ./receipts`);
+  console.log(`    $ ${APP_NAME} restore ./receipts -y`);
   console.log(`    $ ${APP_NAME} configure`);
   console.log('');
   return '';
