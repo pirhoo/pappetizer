@@ -24,7 +24,6 @@ export class ReceiptDataExtractor {
       { patterns: ['home depot'], name: 'Home Depot' },
       { patterns: ['lowes', "lowe's"], name: "Lowe's" },
       { patterns: ['ikea'], name: 'IKEA' },
-      { patterns: ['cvs'], name: 'CVS' },
       { patterns: ['walgreens'], name: 'Walgreens' },
       { patterns: ['rite aid'], name: 'Rite Aid' },
       { patterns: ['kroger'], name: 'Kroger' },
@@ -54,9 +53,7 @@ export class ReceiptDataExtractor {
       { patterns: ['ross'], name: 'Ross' },
       { patterns: ['burlington'], name: 'Burlington' },
       { patterns: ['old navy'], name: 'Old Navy' },
-      { patterns: ['gap'], name: 'Gap' },
       { patterns: ['banana republic'], name: 'Banana Republic' },
-      { patterns: ['h&m', 'h & m'], name: 'H&M' },
       { patterns: ['zara'], name: 'Zara' },
       { patterns: ['uniqlo'], name: 'Uniqlo' },
       { patterns: ['forever 21'], name: 'Forever 21' },
@@ -100,7 +97,6 @@ export class ReceiptDataExtractor {
       { patterns: ['domino', "domino's"], name: "Domino's" },
       { patterns: ['papa john', "papa john's"], name: "Papa John's" },
       { patterns: ['little caesars'], name: 'Little Caesars' },
-      { patterns: ['kfc', 'kentucky fried'], name: 'KFC' },
       { patterns: ['popeyes', "popeye's"], name: 'Popeyes' },
       { patterns: ['chick-fil-a', 'chick fil a', 'chickfila'], name: 'Chick-fil-A' },
       { patterns: ['panera'], name: 'Panera Bread' },
@@ -161,7 +157,6 @@ export class ReceiptDataExtractor {
       { patterns: ['github'], name: 'GitHub' },
       { patterns: ['gitlab'], name: 'GitLab' },
       { patterns: ['atlassian', 'jira'], name: 'Atlassian' },
-      { patterns: ['aws', 'amazon web services'], name: 'AWS' },
       { patterns: ['digitalocean', 'digital ocean'], name: 'DigitalOcean' },
       { patterns: ['heroku'], name: 'Heroku' },
       { patterns: ['vercel'], name: 'Vercel' },
@@ -187,7 +182,6 @@ export class ReceiptDataExtractor {
       { patterns: ['lufthansa'], name: 'Lufthansa' },
       { patterns: ['british airways'], name: 'British Airways' },
       { patterns: ['air france'], name: 'Air France' },
-      { patterns: ['klm'], name: 'KLM' },
       { patterns: ['swiss air', 'swiss international'], name: 'Swiss Air' },
       { patterns: ['ryanair'], name: 'Ryanair' },
       { patterns: ['easyjet'], name: 'EasyJet' },
@@ -204,11 +198,9 @@ export class ReceiptDataExtractor {
       { patterns: ['shell'], name: 'Shell' },
       { patterns: ['exxon', 'exxonmobil'], name: 'ExxonMobil' },
       { patterns: ['chevron'], name: 'Chevron' },
-      { patterns: ['bp'], name: 'BP' },
       { patterns: ['mobil'], name: 'Mobil' },
       { patterns: ['texaco'], name: 'Texaco' },
       { patterns: ['marathon'], name: 'Marathon' },
-      { patterns: ['76'], name: '76' },
       { patterns: ['sunoco'], name: 'Sunoco' },
       { patterns: ['citgo'], name: 'Citgo' },
       { patterns: ['total'], name: 'Total' },
@@ -223,7 +215,6 @@ export class ReceiptDataExtractor {
       { patterns: ['aetna'], name: 'Aetna' },
       { patterns: ['kaiser'], name: 'Kaiser' },
       { patterns: ['blue cross', 'bluecross'], name: 'Blue Cross' },
-      { patterns: ['gnc'], name: 'GNC' },
       { patterns: ['vitamin shoppe'], name: 'Vitamin Shoppe' },
 
       // Utilities & Services
@@ -233,7 +224,6 @@ export class ReceiptDataExtractor {
       { patterns: ['sprint'], name: 'Sprint' },
       { patterns: ['comcast', 'xfinity'], name: 'Comcast' },
       { patterns: ['spectrum'], name: 'Spectrum' },
-      { patterns: ['cox'], name: 'Cox' },
       { patterns: ['centurylink'], name: 'CenturyLink' },
       { patterns: ['vodafone'], name: 'Vodafone' },
       { patterns: ['orange'], name: 'Orange' },
@@ -277,7 +267,6 @@ export class ReceiptDataExtractor {
       // Sporting goods
       { patterns: ['dick', "dick's sporting"], name: "Dick's Sporting Goods" },
       { patterns: ['academy sports'], name: 'Academy Sports' },
-      { patterns: ['rei'], name: 'REI' },
       { patterns: ['bass pro'], name: 'Bass Pro Shops' },
       { patterns: ['cabela'], name: "Cabela's" },
 
@@ -607,7 +596,7 @@ export class ReceiptDataExtractor {
       const match = text.match(pattern);
       if (match && match[1]) {
         const vendor = match[1].trim();
-        if (this.isValidVendorName(vendor) && vendor.length > 2) {
+        if (this.isValidVendorName(vendor)) {
           return vendor;
         }
       }
