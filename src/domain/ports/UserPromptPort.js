@@ -39,4 +39,14 @@ export class UserPromptPort {
   success(_message) {
     throw new Error('Method not implemented');
   }
+
+  /**
+   * Confirm memorizing a vendor alias
+   * @param {string} _from - Original vendor name
+   * @param {string} _to - Corrected vendor name
+   * @returns {Promise<boolean>}
+   */
+  async confirmMemorizeVendor(_from, _to) {
+    throw new Error('Method not implemented');
+  }
 }

@@ -68,11 +68,17 @@ export class RenameReceiptsUseCase {
   }
 
   /**
-   * Record vendor alias if vendor was edited
+   * Record vendor alias if vendor was edited (with user confirmation)
    */
   async recordVendorEdit(receipt, editedFields) {
     if (this.memory && editedFields.vendor !== undefined && editedFields.vendor !== receipt.vendor) {
-      await this.memory.recordVendorAlias(receipt.vendor, editedFields.vendor);
+      const shouldMemorize = await this.userPrompt.confirmMemorizeVendor(
+        receipt.vendor || 'unknown',
+        editedFields.vendor,
+      );
+      if (shouldMemorize) {
+        await this.memory.recordVendorAlias(receipt.vendor, editedFields.vendor);
+      }
     }
   }
 

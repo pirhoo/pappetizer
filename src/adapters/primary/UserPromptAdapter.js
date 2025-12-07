@@ -632,4 +632,23 @@ export class UserPromptAdapter extends UserPromptPort {
       console.log(`             ${c.dim}${symbols.arrowRight}${c.reset} ${c.yellow}${to}${c.reset}`);
     }
   }
+
+  /**
+   * Confirm memorizing a vendor alias
+   * @param {string} from - Original vendor name
+   * @param {string} to - Corrected vendor name
+   * @returns {Promise<boolean>}
+   */
+  async confirmMemorizeVendor(from, to) {
+    console.log('');
+    const shouldMemorize = await confirm({
+      message: `${c.bold}Remember${c.reset} ${c.dim}"${from}"${c.reset} ${symbols.arrowRight} ${c.cyan}"${to}"${c.reset} ${c.dim}for future receipts?${c.reset}`,
+      default: true,
+      theme: {
+        prefix: `  ${c.magenta}${symbols.info}${c.reset}`,
+      },
+    });
+
+    return shouldMemorize;
+  }
 }
