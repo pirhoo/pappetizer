@@ -229,6 +229,19 @@ export function createSpinner(text = '') {
       this.stop();
       console.log(`${c.blue}${symbols.info}${c.reset} ${newText || currentText}`);
     },
+
+    /**
+     * Show a completed step and continue with new text
+     */
+    step(completedText, newText) {
+      // Clear current line and show completed step
+      process.stdout.write('\r' + ' '.repeat(stripAnsi(currentText).length + 4) + '\r');
+      console.log(`  ${c.dim}${symbols.success}${c.reset} ${c.dim}${completedText}${c.reset}`);
+      // Update text and continue spinning
+      if (newText) {
+        currentText = newText;
+      }
+    },
   };
 }
 

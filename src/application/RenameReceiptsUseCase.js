@@ -403,30 +403,37 @@ export class RenameReceiptsUseCase {
    */
   async extractReceiptData(filePath, originalName) {
     const ext = this.fileSystem.getExtension(filePath);
+
+    this.userPrompt.updateSpinner('Reading file...');
     const buffer = await this.fileSystem.readFile(filePath);
     let text = '';
 
     if (ext === '.pdf') {
-      // Try to extract text from PDF
+      this.userPrompt.stepSpinner('File read', 'Extracting text from PDF...');
       const pdfText = await this.pdfReader.extractText(buffer);
 
       if (pdfText && pdfText.trim().length > 20) {
         text = pdfText;
+        this.userPrompt.stepSpinner('Text extracted from PDF', 'Analyzing receipt data...');
       } else {
-        // PDF might be image-based, try to extract and OCR images
+        this.userPrompt.stepSpinner('No text layer found', 'Extracting images from PDF...');
         const images = await this.pdfReader.extractImages(buffer);
 
         if (images.length === 0) {
           throw new Error('Could not extract images from PDF');
         }
 
+        this.userPrompt.stepSpinner(`Extracted ${images.length} page(s)`, 'Running OCR...');
         const textParts = [];
-        for (const imageBuffer of images) {
+        for (let i = 0; i < images.length; i++) {
+          if (images.length > 1) {
+            this.userPrompt.updateSpinner(`Running OCR (page ${i + 1}/${images.length})...`);
+          }
           try {
-            const imageText = await this.ocr.extractText(imageBuffer);
+            const imageText = await this.ocr.extractText(images[i]);
             textParts.push(imageText);
           } catch (ocrError) {
-            this.userPrompt.warn(`OCR failed for page: ${ocrError.message}`);
+            this.userPrompt.warn(`OCR failed for page ${i + 1}: ${ocrError.message}`);
           }
         }
 
@@ -435,21 +442,25 @@ export class RenameReceiptsUseCase {
         if (!text.trim()) {
           throw new Error('OCR could not extract any text from PDF');
         }
+        this.userPrompt.stepSpinner('OCR complete', 'Analyzing receipt data...');
       }
     } else {
-      // Image file - OCR directly
+      this.userPrompt.stepSpinner('File read', 'Running OCR...');
       text = await this.ocr.extractText(buffer);
+      this.userPrompt.stepSpinner('OCR complete', 'Analyzing receipt data...');
     }
 
     // Use LLM for extraction if available, with fallback to heuristics
     let extracted;
     let usedLlm = false;
     if (this.llm && this.llm.isAvailable()) {
+      this.userPrompt.updateSpinner('Extracting data with LLM...');
       try {
         // Pass vendor aliases to LLM for context
         const vendorAliases = this.memory ? this.memory.getVendorAliases() : {};
         extracted = await this.llm.extractReceiptData(text, vendorAliases);
         usedLlm = true;
+        this.userPrompt.stepSpinner('LLM extraction complete', 'Finalizing...');
         // If LLM returns incomplete data, fill in gaps with heuristic extraction
         const heuristicExtracted = this.dataExtractor.extract(text);
         extracted = {
@@ -459,7 +470,8 @@ export class RenameReceiptsUseCase {
           currency: extracted.currency || heuristicExtracted.currency,
         };
       } catch (error) {
-        this.userPrompt.warn(`LLM extraction failed: ${error.message}. Falling back to heuristics.`);
+        this.userPrompt.stepSpinner('LLM failed', 'Falling back to heuristics...');
+        this.userPrompt.warn(`LLM extraction failed: ${error.message}`);
         extracted = this.dataExtractor.extract(text);
         usedLlm = false;
       }

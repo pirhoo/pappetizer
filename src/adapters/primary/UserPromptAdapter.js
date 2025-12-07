@@ -501,6 +501,17 @@ export class UserPromptAdapter extends UserPromptPort {
   }
 
   /**
+   * Show completed step and continue spinner with new text
+   * @param {string} completedText - Text for the completed step
+   * @param {string} newText - New spinner text
+   */
+  stepSpinner(completedText, newText) {
+    if (this.spinner) {
+      this.spinner.step(completedText, newText);
+    }
+  }
+
+  /**
    * Display a log message
    * @param {string} message - Message to display
    */
