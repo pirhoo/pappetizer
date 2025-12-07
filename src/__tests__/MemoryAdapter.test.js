@@ -179,7 +179,7 @@ describe('MemoryAdapter', () => {
       await fs.mkdir(tempDir, { recursive: true });
       await fs.writeFile(
         path.join(tempDir, 'memory.json'),
-        JSON.stringify(memoryData, null, 2)
+        JSON.stringify(memoryData, null, 2),
       );
 
       // Create new adapter and initialize

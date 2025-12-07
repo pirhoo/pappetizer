@@ -16,10 +16,6 @@ import { UserPromptAdapter } from './adapters/primary/UserPromptAdapter.js';
 import {
   colors as c,
   symbols,
-  header,
-  box,
-  keyValue,
-  divider,
   badge,
   timestamp,
 } from './adapters/primary/ui.js';
@@ -38,14 +34,6 @@ function printHeader() {
   console.log('');
   console.log(`  ${c.bold}${c.cyan}${APP_NAME}${c.reset} ${c.dim}v${APP_VERSION}${c.reset}`);
   console.log(`  ${c.dim}${APP_DESCRIPTION}${c.reset}`);
-  console.log('');
-}
-
-/**
- * Print a section header
- */
-function printSection(title) {
-  console.log(`  ${c.bold}${title}${c.reset}`);
   console.log('');
 }
 
@@ -103,7 +91,7 @@ function printFlags(flags) {
 
 program
   .name(APP_NAME)
-  .description(`CLI tool to rename receipt files by extracting vendor, date, and amount`)
+  .description('CLI tool to rename receipt files by extracting vendor, date, and amount')
   .version(APP_VERSION);
 
 // Configure subcommand

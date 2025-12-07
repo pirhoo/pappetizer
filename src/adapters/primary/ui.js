@@ -138,7 +138,7 @@ export function box(content, options = {}) {
     const leftPad = Math.floor((innerWidth - titleLen) / 2);
     const rightPad = innerWidth - titleLen - leftPad;
     result.push(
-      `${borderColor}${symbols.boxTopLeft}${symbols.boxHorizontal.repeat(leftPad)}${c.reset}${titleColor}${titleText}${c.reset}${borderColor}${symbols.boxHorizontal.repeat(rightPad)}${symbols.boxTopRight}${c.reset}`
+      `${borderColor}${symbols.boxTopLeft}${symbols.boxHorizontal.repeat(leftPad)}${c.reset}${titleColor}${titleText}${c.reset}${borderColor}${symbols.boxHorizontal.repeat(rightPad)}${symbols.boxTopRight}${c.reset}`,
     );
   } else {
     result.push(`${borderColor}${symbols.boxTopLeft}${horizontal}${symbols.boxTopRight}${c.reset}`);
@@ -149,7 +149,7 @@ export function box(content, options = {}) {
     const lineLen = stripAnsi(line).length;
     const rightPad = maxLen - lineLen;
     result.push(
-      `${borderColor}${symbols.boxVertical}${c.reset}${paddingStr}${line}${' '.repeat(rightPad)}${paddingStr}${borderColor}${symbols.boxVertical}${c.reset}`
+      `${borderColor}${symbols.boxVertical}${c.reset}${paddingStr}${line}${' '.repeat(rightPad)}${paddingStr}${borderColor}${symbols.boxVertical}${c.reset}`,
     );
   }
 
@@ -403,7 +403,7 @@ export function timestamp() {
     hour12: false,
     hour: '2-digit',
     minute: '2-digit',
-    second: '2-digit'
+    second: '2-digit',
   });
   return `${c.dim}${time}${c.reset}`;
 }

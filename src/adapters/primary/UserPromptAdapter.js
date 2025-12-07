@@ -41,7 +41,7 @@ export class UserPromptAdapter extends UserPromptPort {
     console.log('');
     console.log(box(
       `${c.dim}From${c.reset}  ${originalName}\n${c.dim}To${c.reset}    ${c.green}${suggestedName}${c.reset}\n\n${extractedLines.join('\n')}`,
-      { title: 'RENAME', titleColor: c.cyan + c.bold, padding: 1 }
+      { title: 'RENAME', titleColor: c.cyan + c.bold, padding: 1 },
     ));
     console.log('');
 

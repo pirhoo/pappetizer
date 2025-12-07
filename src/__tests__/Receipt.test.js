@@ -173,7 +173,7 @@ describe('Receipt', () => {
       });
 
       expect(receipt.generateFilename({
-        nameTemplate: '{vendor}{sep}{date}{sep}{amount}{currency}{ext}'
+        nameTemplate: '{vendor}{sep}{date}{sep}{amount}{currency}{ext}',
       })).toBe('STORE - 20240315 - 10.00USD.pdf');
     });
 
