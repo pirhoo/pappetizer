@@ -1,3 +1,10 @@
+import {
+  CURRENCY_MAP,
+  CONFIDENCE_WEIGHTS,
+  INVALID_FILENAME_CHARS,
+  DEFAULTS,
+} from '../constants.js';
+
 /**
  * Receipt entity representing extracted receipt data
  */
@@ -21,29 +28,29 @@ export class Receipt {
   calculateConfidence({ usedLlm = false } = {}) {
     let score = 0;
 
-    // Vendor: 0.3 points (high priority)
+    // Vendor: high priority
     if (this.vendor && this.vendor.trim() !== '' && this.vendor !== 'UNKNOWN') {
-      score += 0.3;
+      score += CONFIDENCE_WEIGHTS.VENDOR;
     }
 
-    // Date: 0.3 points (high priority)
+    // Date: high priority
     if (this.date && !isNaN(new Date(this.date).getTime())) {
-      score += 0.3;
+      score += CONFIDENCE_WEIGHTS.DATE;
     }
 
-    // Amount: 0.2 points (medium priority)
+    // Amount: medium priority
     if (this.amount !== null && this.amount !== undefined && this.amount > 0) {
-      score += 0.2;
+      score += CONFIDENCE_WEIGHTS.AMOUNT;
     }
 
-    // Currency: 0.1 points (low priority)
+    // Currency: low priority
     if (this.currency && this.currency.trim() !== '') {
-      score += 0.1;
+      score += CONFIDENCE_WEIGHTS.CURRENCY;
     }
 
-    // LLM bonus: 0.1 points (when LLM was used, data is typically more reliable)
+    // LLM bonus (when LLM was used, data is typically more reliable)
     if (usedLlm) {
-      score += 0.1;
+      score += CONFIDENCE_WEIGHTS.LLM_BONUS;
     }
 
     // Cap at 1.0
@@ -61,10 +68,10 @@ export class Receipt {
    */
   generateFilename(config = {}) {
     const {
-      dateFormat = 'YYYYMMDD',
-      nameSeparator = ' - ',
-      nameTemplate = '{date}{sep}{vendor}{sep}{amount} {currency}{ext}',
-      defaultCurrency = 'USD',
+      dateFormat = DEFAULTS.DATE_FORMAT,
+      nameSeparator = DEFAULTS.NAME_SEPARATOR,
+      nameTemplate = DEFAULTS.NAME_TEMPLATE,
+      defaultCurrency = DEFAULTS.CURRENCY,
     } = config;
 
     const ext = this.getExtension();
@@ -114,51 +121,56 @@ export class Receipt {
     }
   }
 
+  /**
+   * Sanitize vendor name for use in filename
+   * Removes invalid filename characters: < > : " / \ | ? *
+   * Normalizes whitespace and converts to uppercase
+   * @returns {string} Sanitized vendor name
+   */
   sanitizeVendor() {
     if (!this.vendor) return 'UNKNOWN';
     return this.vendor
-      .replace(/[<>:"/\\|?*]/g, '')
+      .replace(INVALID_FILENAME_CHARS, '')
       .replace(/\s+/g, ' ')
       .trim()
       .toUpperCase();
   }
 
+  /**
+   * Format amount with 2 decimal places
+   * @returns {string} Formatted amount (e.g., "50.00")
+   */
   formatAmount() {
     if (this.amount === null || this.amount === undefined) return '0.00';
     return Number(this.amount).toFixed(2);
   }
 
-  normalizeCurrency(defaultCurrency = 'USD') {
+  /**
+   * Normalize currency code to standard 3-letter format
+   * Handles common currency names and symbols
+   * @param {string} defaultCurrency - Fallback currency if not detected
+   * @returns {string} Normalized 3-letter currency code
+   */
+  normalizeCurrency(defaultCurrency = DEFAULTS.CURRENCY) {
     if (!this.currency) return defaultCurrency;
-    const currencyMap = {
-      '$': 'USD',
-      'dollar': 'USD',
-      'dollars': 'USD',
-      'usd': 'USD',
-      'eur': 'EUR',
-      'euro': 'EUR',
-      'euros': 'EUR',
-      'chf': 'CHF',
-      'franc': 'CHF',
-      'francs': 'CHF',
-      'gbp': 'GBP',
-      'pound': 'GBP',
-      'pounds': 'GBP',
-      'sterling': 'GBP',
-      'jpy': 'JPY',
-      'yen': 'JPY',
-      'cad': 'CAD',
-      'aud': 'AUD',
-    };
     const normalized = this.currency.toLowerCase().trim();
-    return currencyMap[normalized] || this.currency.toUpperCase().substring(0, 3);
+    return CURRENCY_MAP[normalized] || this.currency.toUpperCase().substring(0, 3);
   }
 
+  /**
+   * Get file extension from original filename
+   * @returns {string} Lowercase extension with dot (e.g., ".pdf")
+   */
   getExtension() {
     const match = this.originalName?.match(/\.[^.]+$/);
     return match ? match[0].toLowerCase() : '';
   }
 
+  /**
+   * Convert receipt to JSON object for serialization
+   * @param {object} config - Configuration for filename generation
+   * @returns {object} JSON representation of receipt
+   */
   toJSON(config = {}) {
     return {
       filePath: this.filePath,
