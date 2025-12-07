@@ -191,7 +191,8 @@ program
     const ocrAdapter = new OcrAdapter();
     const pdfReaderAdapter = new PdfReaderAdapter();
     const manifestAdapter = new ManifestAdapter();
-    const memoryAdapter = new MemoryAdapter(configAdapter, configuration);
+    const memoryAdapter = new MemoryAdapter();
+    await memoryAdapter.initialize();
 
     const createUseCase = () => new RenameReceiptsUseCase({
       fileSystemAdapter,
