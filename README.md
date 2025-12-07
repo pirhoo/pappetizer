@@ -41,6 +41,23 @@ npm link
 
 ## 🚀 Usage
 
+### Configuration
+
+This will change the default values used by Pappetizer commands:
+
+```bash
+# Run interactive configuration wizard
+pappetizer configure
+```
+
+Configuration options include:
+- Date format (YYYYMMDD, YYYY-MM-DD, DD-MM-YYYY, etc.)
+- Filename separator
+- Filename template
+- Default currency
+- OCR language
+- LLM provider and settings
+
 ### Basic Commands
 
 ```bash
@@ -91,21 +108,6 @@ pappetizer restore ./receipts -y
 # Preview restoration
 pappetizer restore ./receipts --dry-run
 ```
-
-### Configuration
-
-```bash
-# Run interactive configuration wizard
-pappetizer configure
-```
-
-Configuration options include:
-- Date format (YYYYMMDD, YYYY-MM-DD, DD-MM-YYYY, etc.)
-- Filename separator
-- Filename template
-- Default currency
-- OCR language
-- LLM provider and settings
 
 ## 📋 Filename Template
 
