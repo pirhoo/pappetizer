@@ -43,70 +43,191 @@ npm link
 
 ### Configuration
 
-This will change the default values used by Pappetizer commands:
+Before processing receipts, you can configure Pappetizer's default behavior using the interactive wizard. This saves your preferences so you don't need to specify them each time.
 
 ```bash
-# Run interactive configuration wizard
 pappetizer configure
 ```
 
-Configuration options include:
-- Date format (YYYYMMDD, YYYY-MM-DD, DD-MM-YYYY, etc.)
-- Filename separator
-- Filename template
-- Default currency
-- OCR language
-- LLM provider and settings
+The wizard guides you through setting:
+- **Date format** - How dates appear in filenames (YYYYMMDD, YYYY-MM-DD, DD-MM-YYYY, etc.)
+- **Filename separator** - Character(s) between name parts (default: ` - `)
+- **Filename template** - Structure of the output filename
+- **Default currency** - Fallback when currency can't be detected (USD, EUR, CHF, etc.)
+- **OCR language** - Language for text recognition (English, German, French, etc.)
+- **LLM settings** - AI provider, API keys, and model selection
+
+Configuration is stored in `~/.config/pappetizer/config.json`.
 
 ### Basic Commands
 
+#### Process a Directory
+
+Scan a directory for receipt files and rename them based on extracted data:
+
 ```bash
-# Rename receipts in a directory
 pappetizer clean ./receipts
+```
 
-# Process a single file
+For each file, Pappetizer extracts the vendor name, date, and amount, then presents a suggested new filename. You can accept, edit, or skip each suggestion.
+
+#### Process a Single File
+
+Rename just one specific receipt file:
+
+```bash
 pappetizer clean ./receipt.pdf
+```
 
-# Preview changes without renaming (dry run)
+Useful when you have a single receipt to process without scanning an entire directory.
+
+#### Preview Changes (Dry Run)
+
+See what would be renamed without actually modifying any files:
+
+```bash
 pappetizer clean ./receipts --dry-run
+```
 
-# Process subdirectories recursively
+This is helpful to verify the extraction quality before committing to changes. The output shows proposed renames but leaves all files untouched.
+
+#### Process Subdirectories
+
+Recursively process all receipt files in nested subdirectories:
+
+```bash
 pappetizer clean ./receipts -r
+```
 
-# Auto-accept all suggestions
+Without this flag, only files in the specified directory are processed. Hidden directories (starting with `.`) are always skipped.
+
+#### Auto-Accept All Suggestions
+
+Skip the confirmation prompt and automatically accept all rename suggestions:
+
+```bash
 pappetizer clean ./receipts -y
+```
 
-# Watch for new files
+Best used after verifying extraction quality with `--dry-run`. Files with low confidence scores will still prompt for review to prevent incorrect renames.
+
+#### Watch Mode
+
+Continuously monitor a directory and automatically process new files as they appear:
+
+```bash
 pappetizer clean ./receipts --watch
+```
 
-# Re-process files even if already renamed
+Useful for automating receipt processing. When a new file is added to the directory, Pappetizer detects it and processes it automatically. Press `Ctrl+C` to stop watching.
+
+#### Force Re-processing
+
+Re-process files that have already been renamed by Pappetizer:
+
+```bash
 pappetizer clean ./receipts --force
+```
+
+By default, Pappetizer tracks renamed files in a manifest and skips them on subsequent runs. Use `--force` to override this and re-extract data from previously processed files.
+
+#### Combine Options
+
+Options can be combined for powerful workflows:
+
+```bash
+# Preview recursive processing with auto-accept
+pappetizer clean ./receipts -r --dry-run -y
+
+# Watch a directory with recursive processing
+pappetizer clean ./receipts -r --watch
+
+# Force re-process with AI extraction
+pappetizer clean ./receipts --force --use-llm
 ```
 
 ### Using AI Extraction
 
+AI-powered extraction significantly improves accuracy, especially for receipts with complex layouts or unusual formatting. The LLM analyzes the OCR text and intelligently extracts structured data.
+
+#### Anthropic (Claude)
+
+Use Anthropic's Claude models for extraction:
+
 ```bash
-# With Anthropic (Claude)
 pappetizer clean ./receipts --use-llm --llm-provider anthropic --api-key sk-ant-...
+```
 
-# With OpenAI (ChatGPT)
+Available models: `claude-3-haiku` (fastest), `claude-3-5-haiku` (balanced), `claude-3-5-sonnet` (best quality).
+
+#### OpenAI (ChatGPT)
+
+Use OpenAI's GPT models:
+
+```bash
 pappetizer clean ./receipts --use-llm --llm-provider openai --api-key sk-...
+```
 
-# With Ollama (local)
+Available models: `gpt-4o-mini` (fastest), `gpt-4o` (balanced), `gpt-4-turbo` (best quality).
+
+#### Ollama (Local)
+
+Run AI extraction locally without sending data to external services:
+
+```bash
 pappetizer clean ./receipts --use-llm --llm-provider ollama --model llama3.2
+```
+
+Requires Ollama running locally (default: `http://localhost:11434`). Specify a different host with `--ollama-host`.
+
+#### Specifying Models
+
+Override the default model for any provider:
+
+```bash
+# Use a specific Claude model
+pappetizer clean ./receipts --use-llm --llm-provider anthropic --model claude-3-5-sonnet-20241022
+
+# Use a specific Ollama model
+pappetizer clean ./receipts --use-llm --llm-provider ollama --model mistral
 ```
 
 ### Restore Original Names
 
+Pappetizer keeps a manifest of all renames, allowing you to restore files to their original names at any time.
+
+#### Restore a Directory
+
+Restore all renamed files in a directory to their original names:
+
 ```bash
-# Restore files in a directory
 pappetizer restore ./receipts
+```
 
-# Restore with auto-accept
+For each file, you'll be asked to confirm the restoration. Files not in the manifest (not renamed by Pappetizer) are skipped.
+
+#### Auto-Accept Restoration
+
+Restore all files without confirmation prompts:
+
+```bash
 pappetizer restore ./receipts -y
+```
 
-# Preview restoration
+#### Preview Restoration
+
+See what would be restored without making changes:
+
+```bash
 pappetizer restore ./receipts --dry-run
+```
+
+#### Recursive Restoration
+
+Restore files in all subdirectories:
+
+```bash
+pappetizer restore ./receipts -r
 ```
 
 ## 📋 Filename Template
@@ -114,27 +235,57 @@ pappetizer restore ./receipts --dry-run
 The default template is: `{date}{sep}{vendor}{sep}{amount} {currency}{ext}`
 
 Available placeholders:
-- `{date}` - Transaction date
-- `{vendor}` - Vendor/store name
-- `{amount}` - Total amount
-- `{currency}` - Currency code
+- `{date}` - Transaction date (formatted according to your date format setting)
+- `{vendor}` - Vendor/store name (sanitized and uppercased)
+- `{amount}` - Total amount (with 2 decimal places)
+- `{currency}` - Currency code (3 letters, e.g., USD, EUR)
 - `{sep}` - Configured separator
-- `{ext}` - Original file extension
+- `{ext}` - Original file extension (preserved)
 
-Example output: `20240315 - WALMART - 42.99 USD.pdf`
+**Example outputs:**
+- Default: `20240315 - WALMART - 42.99 USD.pdf`
+- European date: `15-03-2024 - MIGROS - 23.50 CHF.pdf`
+- Custom separator: `2024.03.15_AMAZON_129.00_EUR.pdf`
 
 ## 🔧 Environment Variables
 
+Instead of passing API keys on the command line, you can set them as environment variables:
+
 ```bash
-ANTHROPIC_API_KEY=sk-ant-...  # For Anthropic/Claude
-OPENAI_API_KEY=sk-...         # For OpenAI/ChatGPT
-OLLAMA_HOST=http://localhost:11434  # For Ollama
+# For Anthropic/Claude
+export ANTHROPIC_API_KEY=sk-ant-...
+
+# For OpenAI/ChatGPT
+export OPENAI_API_KEY=sk-...
+
+# For Ollama (custom host)
+export OLLAMA_HOST=http://localhost:11434
+```
+
+With environment variables set, you can simply run:
+
+```bash
+pappetizer clean ./receipts --use-llm --llm-provider anthropic
 ```
 
 ## 📁 Supported File Types
 
-- PDF (`.pdf`) - Native text extraction with OCR fallback
-- Images (`.png`, `.jpg`, `.jpeg`, `.tiff`, `.tif`, `.bmp`, `.gif`)
+- **PDF** (`.pdf`) - Native text extraction with automatic OCR fallback for image-based PDFs
+- **Images** (`.png`, `.jpg`, `.jpeg`, `.tiff`, `.tif`, `.bmp`, `.gif`) - Full OCR processing
+
+## 🧠 Memory Feature
+
+Pappetizer learns from your corrections. When you edit a vendor name (e.g., changing "AMAZON WEB SERVICES" to "AWS"), it remembers this preference and automatically applies it to future receipts from the same vendor.
+
+Vendor aliases are stored globally in your configuration and work across all directories.
+
+## 📊 Confidence Scoring
+
+Each extraction includes a confidence score (0-100%) based on:
+- Whether all fields (vendor, date, amount, currency) were detected
+- Whether AI extraction was used (higher confidence)
+
+Files with low confidence scores prompt for manual review even when using `-y` (auto-accept), helping prevent incorrect renames.
 
 ## 🤝 Contributing
 
