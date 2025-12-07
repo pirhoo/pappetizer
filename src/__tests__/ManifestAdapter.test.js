@@ -247,6 +247,57 @@ describe('ManifestAdapter', () => {
     });
   });
 
+  describe('getRenameEntry', () => {
+    it('should return null for non-existent manifest', async () => {
+      const result = await adapter.getRenameEntry(tempDir, 'receipt.pdf');
+      expect(result).toBeNull();
+    });
+
+    it('should return null for file not in manifest', async () => {
+      const manifestPath = path.join(tempDir, '.pappetizer.json');
+      await fs.writeFile(manifestPath, JSON.stringify({
+        version: '1.0',
+        renames: [{ originalName: 'other.pdf', newName: 'renamed.pdf' }],
+      }), 'utf-8');
+
+      const result = await adapter.getRenameEntry(tempDir, 'receipt.pdf');
+      expect(result).toBeNull();
+    });
+
+    it('should return the entry for a file in manifest', async () => {
+      const manifestPath = path.join(tempDir, '.pappetizer.json');
+      await fs.writeFile(manifestPath, JSON.stringify({
+        version: '1.0',
+        renames: [{
+          originalName: 'receipt.pdf',
+          newName: '2024-01-15 - Walmart - 50.00 USD.pdf',
+          renamedAt: '2024-01-15T10:00:00.000Z',
+          vendor: 'Walmart',
+        }],
+      }), 'utf-8');
+
+      const result = await adapter.getRenameEntry(tempDir, 'receipt.pdf');
+
+      expect(result).not.toBeNull();
+      expect(result.originalName).toBe('receipt.pdf');
+      expect(result.newName).toBe('2024-01-15 - Walmart - 50.00 USD.pdf');
+      expect(result.renamedAt).toBe('2024-01-15T10:00:00.000Z');
+      expect(result.vendor).toBe('Walmart');
+    });
+
+    it('should be case-sensitive for filename matching', async () => {
+      const manifestPath = path.join(tempDir, '.pappetizer.json');
+      await fs.writeFile(manifestPath, JSON.stringify({
+        version: '1.0',
+        renames: [{ originalName: 'Receipt.pdf', newName: 'renamed.pdf' }],
+      }), 'utf-8');
+
+      expect(await adapter.getRenameEntry(tempDir, 'Receipt.pdf')).not.toBeNull();
+      expect(await adapter.getRenameEntry(tempDir, 'receipt.pdf')).toBeNull();
+      expect(await adapter.getRenameEntry(tempDir, 'RECEIPT.pdf')).toBeNull();
+    });
+  });
+
   describe('isRenameResult', () => {
     it('should return false for non-existent manifest', async () => {
       const result = await adapter.isRenameResult(tempDir, 'renamed.pdf');

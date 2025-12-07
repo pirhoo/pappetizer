@@ -32,6 +32,16 @@ export class ManifestPort {
   }
 
   /**
+   * Get the rename entry for a file
+   * @param {string} _dirPath - Directory path
+   * @param {string} _originalName - Original filename
+   * @returns {Promise<object|null>} - The rename entry or null if not found
+   */
+  async getRenameEntry(_dirPath, _originalName) {
+    throw new Error('Method not implemented');
+  }
+
+  /**
    * Check if a filename is the result of a previous rename operation
    * @param {string} _dirPath - Directory path
    * @param {string} _filename - Filename to check

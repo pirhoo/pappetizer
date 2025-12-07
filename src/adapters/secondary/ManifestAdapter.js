@@ -84,6 +84,17 @@ export class ManifestAdapter extends ManifestPort {
   }
 
   /**
+   * Get the rename entry for a file
+   * @param {string} dirPath - Directory path
+   * @param {string} originalName - Original filename
+   * @returns {Promise<object|null>} - The rename entry or null if not found
+   */
+  async getRenameEntry(dirPath, originalName) {
+    const entries = await this.load(dirPath);
+    return entries.get(originalName) || null;
+  }
+
+  /**
    * Check if a filename is the result of a previous rename operation
    * @param {string} dirPath - Directory path
    * @param {string} filename - Filename to check
