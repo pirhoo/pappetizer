@@ -39,21 +39,52 @@ function printHeader() {
 }
 
 /**
- * Print stats summary
+ * Resolve and validate a path, exiting on error
+ * @returns {{ resolvedPath: string, isFile: boolean }}
+ */
+function resolveAndValidatePath(targetPath, userPrompt) {
+  const resolvedPath = path.resolve(targetPath);
+  let isFile = false;
+
+  try {
+    const stat = fs.statSync(resolvedPath);
+    isFile = stat.isFile();
+  } catch {
+    userPrompt.error(`Path not found: ${resolvedPath}`);
+    process.exit(1);
+  }
+
+  console.log(`  ${c.dim}${isFile ? 'File' : 'Directory'}${c.reset}  ${resolvedPath}`);
+  console.log('');
+
+  return { resolvedPath, isFile };
+}
+
+/**
+ * Print stats summary (works for both clean and restore)
+ * @param {object} stats - Stats object with counts and errors
+ * @param {object} options - Display options
+ * @param {string} options.primaryLabel - Label for primary stat (e.g., 'Renamed', 'Restored')
+ * @param {string} options.primaryKey - Key in stats for primary count
  */
 function printStats(stats, options = {}) {
-  const { verbose = false } = options;
+  const {
+    verbose = false,
+    primaryLabel = 'Renamed',
+    primaryKey = 'renamed',
+    showProcessed = true,
+  } = options;
 
   console.log('');
   console.log(`  ${c.bold}Summary${c.reset}`);
   console.log('');
 
-  // Stats table
-  const statsLine = [
-    `${c.dim}Processed${c.reset} ${c.bold}${stats.processed}${c.reset}`,
-    `${c.green}Renamed${c.reset} ${c.bold}${stats.renamed}${c.reset}`,
-    `${c.dim}Skipped${c.reset} ${stats.skipped}`,
-  ];
+  const statsLine = [];
+  if (showProcessed && stats.processed !== undefined) {
+    statsLine.push(`${c.dim}Processed${c.reset} ${c.bold}${stats.processed}${c.reset}`);
+  }
+  statsLine.push(`${c.green}${primaryLabel}${c.reset} ${c.bold}${stats[primaryKey]}${c.reset}`);
+  statsLine.push(`${c.dim}Skipped${c.reset} ${stats.skipped}`);
 
   if (stats.errors.length > 0) {
     statsLine.push(`${c.red}Errors${c.reset} ${stats.errors.length}`);
@@ -130,42 +161,20 @@ program
   .option('--dry-run', 'Show what would be restored without actually restoring')
   .option('-y, --yes', 'Auto-accept all restorations without prompting')
   .action(async (targetPath, options) => {
-    const resolvedPath = path.resolve(targetPath);
     const userPrompt = new UserPromptAdapter();
-
     printHeader();
 
-    // Check if path exists
-    let isFile = false;
-    try {
-      const stat = fs.statSync(resolvedPath);
-      isFile = stat.isFile();
-    } catch {
-      userPrompt.error(`Path not found: ${resolvedPath}`);
-      process.exit(1);
-    }
+    const { resolvedPath, isFile } = resolveAndValidatePath(targetPath, userPrompt);
 
-    // Show path
-    console.log(`  ${c.dim}${isFile ? 'File' : 'Directory'}${c.reset}  ${resolvedPath}`);
-    console.log('');
-
-    // Print active flags
-    const activeFlags = [];
-    if (options.dryRun) activeFlags.push(badge('DRY RUN', 'warning'));
-    if (options.recursive) activeFlags.push(badge('RECURSIVE', 'info'));
-    if (options.yes) activeFlags.push(badge('AUTO', 'default'));
-
-    if (activeFlags.length > 0) {
-      console.log(`  ${activeFlags.join(' ')}`);
-      console.log('');
-    }
-
-    const fileSystemAdapter = new FileSystemAdapter();
-    const manifestAdapter = new ManifestAdapter();
+    printFlags({
+      dryRun: options.dryRun,
+      recursive: options.recursive,
+      yes: options.yes,
+    });
 
     const useCase = new RestoreUseCase({
-      fileSystemAdapter,
-      manifestAdapter,
+      fileSystemAdapter: new FileSystemAdapter(),
+      manifestAdapter: new ManifestAdapter(),
       userPromptAdapter: userPrompt,
     });
 
@@ -182,42 +191,20 @@ program
           userPrompt.error(result.error);
           process.exit(1);
         }
-
         console.log('');
-        if (result.restored) {
-          console.log(`  ${c.green}${symbols.success}${c.reset} File restored successfully`);
-        } else {
-          console.log(`  ${c.dim}No changes made${c.reset}`);
-        }
+        console.log(result.restored
+          ? `  ${c.green}${symbols.success}${c.reset} File restored successfully`
+          : `  ${c.dim}No changes made${c.reset}`);
+        console.log('');
       } else {
         const stats = await useCase.execute(resolvedPath, executeOptions);
-
-        // Print summary
-        console.log('');
-        console.log(`  ${c.bold}Summary${c.reset}`);
-        console.log('');
-
-        const statsLine = [
-          `${c.green}Restored${c.reset} ${c.bold}${stats.restored}${c.reset}`,
-          `${c.dim}Skipped${c.reset} ${stats.skipped}`,
-        ];
-
-        if (stats.errors.length > 0) {
-          statsLine.push(`${c.red}Errors${c.reset} ${stats.errors.length}`);
-        }
-
-        console.log(`  ${statsLine.join('  ${c.dim}│${c.reset}  ')}`);
-
-        if (stats.errors.length > 0 && options.verbose) {
-          console.log('');
-          console.log(`  ${c.bold}${c.red}Errors${c.reset}`);
-          for (const error of stats.errors) {
-            console.log(`  ${c.red}${symbols.error}${c.reset} ${error}`);
-          }
-        }
+        printStats(stats, {
+          verbose: options.verbose,
+          primaryLabel: 'Restored',
+          primaryKey: 'restored',
+          showProcessed: false,
+        });
       }
-
-      console.log('');
     } catch (error) {
       userPrompt.error(`Restore failed: ${error.message}`);
       process.exit(1);
@@ -241,24 +228,10 @@ program
   .option('--min-confidence <value>', 'Minimum confidence (0-1) for auto-rename with --yes (default: 0.7)', parseFloat)
   .option('-f, --force', 'Re-process files even if already in manifest')
   .action(async (targetPath, options) => {
-    const resolvedPath = path.resolve(targetPath);
     const userPrompt = new UserPromptAdapter();
-
     printHeader();
 
-    // Check if path is a file or directory
-    let isFile = false;
-    try {
-      const stat = fs.statSync(resolvedPath);
-      isFile = stat.isFile();
-    } catch {
-      userPrompt.error(`Path not found: ${resolvedPath}`);
-      process.exit(1);
-    }
-
-    // Show path
-    console.log(`  ${c.dim}${isFile ? 'File' : 'Directory'}${c.reset}  ${resolvedPath}`);
-    console.log('');
+    const { resolvedPath, isFile } = resolveAndValidatePath(targetPath, userPrompt);
 
     // Load configuration
     const configAdapter = new ConfigurationAdapter();

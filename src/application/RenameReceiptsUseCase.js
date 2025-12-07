@@ -28,6 +28,125 @@ export class RenameReceiptsUseCase {
   }
 
   /**
+   * Get filename generation config object
+   */
+  getFilenameConfig() {
+    return {
+      dateFormat: this.config.dateFormat,
+      nameSeparator: this.config.nameSeparator,
+      nameTemplate: this.config.nameTemplate,
+      defaultCurrency: this.config.defaultCurrency,
+    };
+  }
+
+  /**
+   * Build extracted data object for prompt
+   */
+  buildExtractedData(receipt) {
+    return {
+      vendor: receipt.vendor,
+      date: receipt.date,
+      amount: receipt.amount,
+      currency: receipt.currency,
+      confidence: receipt.confidence,
+    };
+  }
+
+  /**
+   * Apply edited fields to create a new receipt
+   */
+  applyEditedFields(receipt, editedFields, filePath, originalName) {
+    return new Receipt({
+      filePath,
+      originalName,
+      vendor: editedFields.vendor !== undefined ? editedFields.vendor : receipt.vendor,
+      date: editedFields.date !== undefined ? editedFields.date : receipt.date,
+      amount: editedFields.amount !== undefined ? editedFields.amount : receipt.amount,
+      currency: editedFields.currency !== undefined ? editedFields.currency : receipt.currency,
+      confidence: receipt.confidence,
+    });
+  }
+
+  /**
+   * Record vendor alias if vendor was edited
+   */
+  async recordVendorEdit(receipt, editedFields) {
+    if (this.memory && editedFields.vendor !== undefined && editedFields.vendor !== receipt.vendor) {
+      await this.memory.recordVendorAlias(receipt.vendor, editedFields.vendor);
+    }
+  }
+
+  /**
+   * Handle user response from rename prompt
+   * @returns {{ shouldRename: boolean, finalName: string, finalReceipt: Receipt, shouldSkip: boolean, setAcceptAll: boolean }}
+   */
+  async handleUserResponse(response, receipt, suggestedName, filePath, originalName) {
+    let finalName = suggestedName;
+    let finalReceipt = receipt;
+    let shouldRename = false;
+    let shouldSkip = false;
+    let setAcceptAll = false;
+
+    switch (response.action) {
+    case 'accept':
+      shouldRename = true;
+      break;
+    case 'acceptAll':
+      shouldRename = true;
+      setAcceptAll = true;
+      break;
+    case 'editFields':
+      await this.recordVendorEdit(receipt, response.editedFields);
+      finalReceipt = this.applyEditedFields(receipt, response.editedFields, filePath, originalName);
+      finalName = finalReceipt.generateFilename(this.getFilenameConfig());
+      shouldRename = true;
+      break;
+    case 'manual':
+      finalName = response.customName;
+      shouldRename = true;
+      break;
+    case 'skip':
+      shouldSkip = true;
+      break;
+    }
+
+    return { shouldRename, finalName, finalReceipt, shouldSkip, setAcceptAll };
+  }
+
+  /**
+   * Perform the actual rename operation
+   */
+  async performRename(filePath, finalName, finalReceipt, originalName, currentDir, dryRun) {
+    const newPath = this.fileSystem.joinPath(currentDir, finalName);
+
+    if (await this.fileSystem.exists(newPath)) {
+      return { success: false, error: `Target file already exists: ${finalName}` };
+    }
+
+    if (dryRun) {
+      this.userPrompt.success(`[DRY RUN] Would rename: ${originalName} -> ${finalName}`);
+    } else {
+      await this.fileSystem.renameFile(filePath, newPath);
+      await this.manifest.addEntry(currentDir, originalName, finalName, finalReceipt.toJSON(this.getFilenameConfig()));
+      this.userPrompt.success(`Renamed: ${originalName} -> ${finalName}`);
+    }
+
+    return { success: true };
+  }
+
+  /**
+   * Apply memory-learned vendor aliases to receipt
+   */
+  applyVendorMemory(receipt) {
+    if (this.memory && receipt.vendor) {
+      const correctedVendor = this.memory.applyVendorAlias(receipt.vendor);
+      if (correctedVendor !== receipt.vendor) {
+        receipt.vendor = correctedVendor;
+      }
+    }
+  }
+
+  /**
    * Execute the rename operation on a directory
    * @param {string} dirPath - Directory to process
    * @param {object} options - Command-line options that override config
@@ -107,159 +226,49 @@ export class RenameReceiptsUseCase {
           const receipt = await this.extractReceiptData(filePath, originalName);
           this.userPrompt.stopSpinner();
 
-          // Apply memory (learned vendor aliases)
-          if (this.memory && receipt.vendor) {
-            const correctedVendor = this.memory.applyVendorAlias(receipt.vendor);
-            if (correctedVendor !== receipt.vendor) {
-              receipt.vendor = correctedVendor;
-            }
-          }
+          this.applyVendorMemory(receipt);
 
-          const suggestedName = receipt.generateFilename({
-            dateFormat: this.config.dateFormat,
-            nameSeparator: this.config.nameSeparator,
-            nameTemplate: this.config.nameTemplate,
-            defaultCurrency: this.config.defaultCurrency,
-          });
+          const suggestedName = receipt.generateFilename(this.getFilenameConfig());
 
-          // Skip if suggested name is same as original
           if (suggestedName === originalName) {
             this.userPrompt.skipped(originalName, 'name unchanged');
             stats.skipped++;
             continue;
           }
 
-          let finalName = suggestedName;
-          let shouldRename = false;
-          let finalReceipt = receipt;
-
-          // Check if we can auto-accept based on confidence threshold
+          const isAutoAccept = acceptAllInDir === currentDir || acceptAllInDir === 'all';
           const meetsConfidenceThreshold = receipt.confidence >= minConfidence;
 
-          if ((acceptAllInDir === currentDir || acceptAllInDir === 'all') && meetsConfidenceThreshold) {
-            // Auto-accept for this directory or globally (only if confidence is high enough)
-            shouldRename = true;
-          } else if ((acceptAllInDir === currentDir || acceptAllInDir === 'all') && !meetsConfidenceThreshold) {
-            // Auto-accept mode but confidence is too low - prompt user
-            this.userPrompt.warn(`Low confidence (${(receipt.confidence * 100).toFixed(0)}%) - prompting for review`);
-            const extractedData = {
-              vendor: receipt.vendor,
-              date: receipt.date,
-              amount: receipt.amount,
-              currency: receipt.currency,
-              confidence: receipt.confidence,
-            };
-            const response = await this.userPrompt.promptForRename(originalName, suggestedName, extractedData);
+          let result;
+          if (isAutoAccept && meetsConfidenceThreshold) {
+            result = { shouldRename: true, finalName: suggestedName, finalReceipt: receipt };
+          } else {
+            if (isAutoAccept && !meetsConfidenceThreshold) {
+              this.userPrompt.warn(`Low confidence (${(receipt.confidence * 100).toFixed(0)}%) - prompting for review`);
+            }
+            const response = await this.userPrompt.promptForRename(
+              originalName, suggestedName, this.buildExtractedData(receipt),
+            );
+            result = await this.handleUserResponse(response, receipt, suggestedName, filePath, originalName);
 
-            switch (response.action) {
-            case 'accept':
-            case 'acceptAll':
-              shouldRename = true;
-              break;
-            case 'editFields':
-              if (this.memory && response.editedFields.vendor !== undefined && response.editedFields.vendor !== receipt.vendor) {
-                await this.memory.recordVendorAlias(receipt.vendor, response.editedFields.vendor);
-              }
-              finalReceipt = new Receipt({
-                filePath,
-                originalName,
-                vendor: response.editedFields.vendor !== undefined ? response.editedFields.vendor : receipt.vendor,
-                date: response.editedFields.date !== undefined ? response.editedFields.date : receipt.date,
-                amount: response.editedFields.amount !== undefined ? response.editedFields.amount : receipt.amount,
-                currency: response.editedFields.currency !== undefined ? response.editedFields.currency : receipt.currency,
-                confidence: receipt.confidence,
-              });
-              finalName = finalReceipt.generateFilename({
-                dateFormat: this.config.dateFormat,
-                nameSeparator: this.config.nameSeparator,
-                nameTemplate: this.config.nameTemplate,
-                defaultCurrency: this.config.defaultCurrency,
-              });
-              shouldRename = true;
-              break;
-            case 'manual':
-              finalName = response.customName;
-              shouldRename = true;
-              break;
-            case 'skip':
+            if (result.shouldSkip) {
               stats.skipped++;
               continue;
             }
-          } else {
-            const extractedData = {
-              vendor: receipt.vendor,
-              date: receipt.date,
-              amount: receipt.amount,
-              currency: receipt.currency,
-              confidence: receipt.confidence,
-            };
-            const response = await this.userPrompt.promptForRename(originalName, suggestedName, extractedData);
-
-            switch (response.action) {
-            case 'accept':
-              shouldRename = true;
-              break;
-            case 'acceptAll':
-              shouldRename = true;
+            if (result.setAcceptAll) {
               acceptAllInDir = currentDir;
-              break;
-            case 'editFields':
-              // Record vendor correction to memory if changed
-              if (this.memory && response.editedFields.vendor !== undefined && response.editedFields.vendor !== receipt.vendor) {
-                await this.memory.recordVendorAlias(receipt.vendor, response.editedFields.vendor);
-              }
-              // Apply edited fields to create new receipt
-              finalReceipt = new Receipt({
-                filePath,
-                originalName,
-                vendor: response.editedFields.vendor !== undefined ? response.editedFields.vendor : receipt.vendor,
-                date: response.editedFields.date !== undefined ? response.editedFields.date : receipt.date,
-                amount: response.editedFields.amount !== undefined ? response.editedFields.amount : receipt.amount,
-                currency: response.editedFields.currency !== undefined ? response.editedFields.currency : receipt.currency,
-                confidence: receipt.confidence,
-              });
-              finalName = finalReceipt.generateFilename({
-                dateFormat: this.config.dateFormat,
-                nameSeparator: this.config.nameSeparator,
-                nameTemplate: this.config.nameTemplate,
-                defaultCurrency: this.config.defaultCurrency,
-              });
-              shouldRename = true;
-              break;
-            case 'manual':
-              finalName = response.customName;
-              shouldRename = true;
-              break;
-            case 'skip':
-              stats.skipped++;
-              continue;
             }
           }
 
-          if (shouldRename) {
-            const newPath = this.fileSystem.joinPath(currentDir, finalName);
-
-            // Check if target already exists
-            if (await this.fileSystem.exists(newPath)) {
-              this.userPrompt.error(`Target file already exists: ${finalName}`);
-              stats.errors.push(`${originalName}: target exists`);
-              continue;
-            }
-
-            if (dryRun) {
-              this.userPrompt.success(`[DRY RUN] Would rename: ${originalName} -> ${finalName}`);
+          if (result.shouldRename) {
+            const renameResult = await this.performRename(
+              filePath, result.finalName, result.finalReceipt, originalName, currentDir, dryRun,
+            );
+            if (renameResult.success) {
               stats.renamed++;
             } else {
-              await this.fileSystem.renameFile(filePath, newPath);
-              await this.manifest.addEntry(currentDir, originalName, finalName, finalReceipt.toJSON({
-                dateFormat: this.config.dateFormat,
-                nameSeparator: this.config.nameSeparator,
-                nameTemplate: this.config.nameTemplate,
-                defaultCurrency: this.config.defaultCurrency,
-              }));
-
-              this.userPrompt.success(`Renamed: ${originalName} -> ${finalName}`);
-              stats.renamed++;
+              this.userPrompt.error(renameResult.error);
+              stats.errors.push(`${originalName}: target exists`);
             }
           }
         } catch (error) {
@@ -334,153 +343,45 @@ export class RenameReceiptsUseCase {
       const receipt = await this.extractReceiptData(filePath, originalName);
       this.userPrompt.stopSpinner();
 
-      // Apply memory (learned vendor aliases)
-      if (this.memory && receipt.vendor) {
-        const correctedVendor = this.memory.applyVendorAlias(receipt.vendor);
-        if (correctedVendor !== receipt.vendor) {
-          receipt.vendor = correctedVendor;
-        }
-      }
+      this.applyVendorMemory(receipt);
 
-      const suggestedName = receipt.generateFilename({
-        dateFormat: this.config.dateFormat,
-        nameSeparator: this.config.nameSeparator,
-        nameTemplate: this.config.nameTemplate,
-        defaultCurrency: this.config.defaultCurrency,
-      });
+      const suggestedName = receipt.generateFilename(this.getFilenameConfig());
 
-      // Skip if suggested name is same as original
       if (suggestedName === originalName) {
         this.userPrompt.skipped(originalName, 'name unchanged');
         result.skipped = true;
         return result;
       }
 
-      let finalName = suggestedName;
-      let shouldRename = false;
-      let finalReceipt = receipt;
-
-      // Check if we can auto-accept based on confidence threshold
       const meetsConfidenceThreshold = receipt.confidence >= minConfidence;
 
+      let handlerResult;
       if (autoAccept && meetsConfidenceThreshold) {
-        shouldRename = true;
-      } else if (autoAccept && !meetsConfidenceThreshold) {
-        // Auto-accept mode but confidence is too low - prompt user
-        this.userPrompt.warn(`Low confidence (${(receipt.confidence * 100).toFixed(0)}%) - prompting for review`);
-        const extractedData = {
-          vendor: receipt.vendor,
-          date: receipt.date,
-          amount: receipt.amount,
-          currency: receipt.currency,
-          confidence: receipt.confidence,
-        };
-        const response = await this.userPrompt.promptForRename(originalName, suggestedName, extractedData);
-
-        switch (response.action) {
-        case 'accept':
-        case 'acceptAll':
-          shouldRename = true;
-          break;
-        case 'editFields':
-          if (this.memory && response.editedFields.vendor !== undefined && response.editedFields.vendor !== receipt.vendor) {
-            await this.memory.recordVendorAlias(receipt.vendor, response.editedFields.vendor);
-          }
-          finalReceipt = new Receipt({
-            filePath,
-            originalName,
-            vendor: response.editedFields.vendor !== undefined ? response.editedFields.vendor : receipt.vendor,
-            date: response.editedFields.date !== undefined ? response.editedFields.date : receipt.date,
-            amount: response.editedFields.amount !== undefined ? response.editedFields.amount : receipt.amount,
-            currency: response.editedFields.currency !== undefined ? response.editedFields.currency : receipt.currency,
-            confidence: receipt.confidence,
-          });
-          finalName = finalReceipt.generateFilename({
-            dateFormat: this.config.dateFormat,
-            nameSeparator: this.config.nameSeparator,
-            nameTemplate: this.config.nameTemplate,
-            defaultCurrency: this.config.defaultCurrency,
-          });
-          shouldRename = true;
-          break;
-        case 'manual':
-          finalName = response.customName;
-          shouldRename = true;
-          break;
-        case 'skip':
-          result.skipped = true;
-          return result;
-        }
+        handlerResult = { shouldRename: true, finalName: suggestedName, finalReceipt: receipt };
       } else {
-        const extractedData = {
-          vendor: receipt.vendor,
-          date: receipt.date,
-          amount: receipt.amount,
-          currency: receipt.currency,
-          confidence: receipt.confidence,
-        };
-        const response = await this.userPrompt.promptForRename(originalName, suggestedName, extractedData);
+        if (autoAccept && !meetsConfidenceThreshold) {
+          this.userPrompt.warn(`Low confidence (${(receipt.confidence * 100).toFixed(0)}%) - prompting for review`);
+        }
+        const response = await this.userPrompt.promptForRename(
+          originalName, suggestedName, this.buildExtractedData(receipt),
+        );
+        handlerResult = await this.handleUserResponse(response, receipt, suggestedName, filePath, originalName);
 
-        switch (response.action) {
-        case 'accept':
-        case 'acceptAll':
-          shouldRename = true;
-          break;
-        case 'editFields':
-          // Record vendor correction to memory if changed
-          if (this.memory && response.editedFields.vendor !== undefined && response.editedFields.vendor !== receipt.vendor) {
-            await this.memory.recordVendorAlias(receipt.vendor, response.editedFields.vendor);
-          }
-          finalReceipt = new Receipt({
-            filePath,
-            originalName,
-            vendor: response.editedFields.vendor !== undefined ? response.editedFields.vendor : receipt.vendor,
-            date: response.editedFields.date !== undefined ? response.editedFields.date : receipt.date,
-            amount: response.editedFields.amount !== undefined ? response.editedFields.amount : receipt.amount,
-            currency: response.editedFields.currency !== undefined ? response.editedFields.currency : receipt.currency,
-            confidence: receipt.confidence,
-          });
-          finalName = finalReceipt.generateFilename({
-            dateFormat: this.config.dateFormat,
-            nameSeparator: this.config.nameSeparator,
-            nameTemplate: this.config.nameTemplate,
-            defaultCurrency: this.config.defaultCurrency,
-          });
-          shouldRename = true;
-          break;
-        case 'manual':
-          finalName = response.customName;
-          shouldRename = true;
-          break;
-        case 'skip':
+        if (handlerResult.shouldSkip) {
           result.skipped = true;
           return result;
         }
       }
 
-      if (shouldRename) {
-        const newPath = this.fileSystem.joinPath(currentDir, finalName);
-
-        if (await this.fileSystem.exists(newPath)) {
-          this.userPrompt.error(`Target file already exists: ${finalName}`);
-          result.error = `${originalName}: target exists`;
-          return result;
-        }
-
-        if (dryRun) {
-          this.userPrompt.success(`[DRY RUN] Would rename: ${originalName} -> ${finalName}`);
+      if (handlerResult.shouldRename) {
+        const renameResult = await this.performRename(
+          filePath, handlerResult.finalName, handlerResult.finalReceipt, originalName, currentDir, dryRun,
+        );
+        if (renameResult.success) {
           result.renamed = true;
         } else {
-          await this.fileSystem.renameFile(filePath, newPath);
-          await this.manifest.addEntry(currentDir, originalName, finalName, finalReceipt.toJSON({
-            dateFormat: this.config.dateFormat,
-            nameSeparator: this.config.nameSeparator,
-            nameTemplate: this.config.nameTemplate,
-            defaultCurrency: this.config.defaultCurrency,
-          }));
-
-          this.userPrompt.success(`Renamed: ${originalName} -> ${finalName}`);
-          result.renamed = true;
+          this.userPrompt.error(renameResult.error);
+          result.error = `${originalName}: target exists`;
         }
       }
     } catch (error) {
