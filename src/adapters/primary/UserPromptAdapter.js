@@ -526,4 +526,45 @@ export class UserPromptAdapter extends UserPromptPort {
   skipped(filename, reason = '') {
     console.log(`  ${c.dim}${symbols.bullet} Skipped: ${filename}${reason ? ` (${reason})` : ''}${c.reset}`);
   }
+
+  /**
+   * Confirm restoration of a file
+   * @param {string} currentName - Current (renamed) filename
+   * @param {string} originalName - Original filename to restore to
+   * @returns {Promise<boolean>}
+   */
+  async confirmRestore(currentName, originalName) {
+    console.log('');
+    console.log(box(
+      `${c.dim}From${c.reset}  ${currentName}\n${c.dim}To${c.reset}    ${c.yellow}${originalName}${c.reset}`,
+      { title: 'RESTORE', titleColor: c.yellow + c.bold, padding: 1 },
+    ));
+    console.log('');
+
+    const shouldRestore = await confirm({
+      message: `${c.bold}Restore to original name?${c.reset}`,
+      default: true,
+      theme: {
+        prefix: `${c.cyan}❯${c.reset}`,
+      },
+    });
+
+    return shouldRestore;
+  }
+
+  /**
+   * Display restore result
+   * @param {string} from - Current (renamed) filename
+   * @param {string} to - Original filename
+   * @param {boolean} dryRun - Whether this is a dry run
+   */
+  restored(from, to, dryRun = false) {
+    if (dryRun) {
+      console.log(`  ${c.yellow}${symbols.arrowRight}${c.reset} ${c.dim}Would restore:${c.reset} ${from}`);
+      console.log(`                ${c.dim}${symbols.arrowRight}${c.reset} ${c.yellow}${to}${c.reset}`);
+    } else {
+      console.log(`  ${c.green}${symbols.success}${c.reset} ${c.dim}Restored:${c.reset} ${from}`);
+      console.log(`             ${c.dim}${symbols.arrowRight}${c.reset} ${c.yellow}${to}${c.reset}`);
+    }
+  }
 }
