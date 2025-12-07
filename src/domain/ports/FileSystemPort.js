@@ -3,12 +3,14 @@
  */
 export class FileSystemPort {
   /**
-   * Walk a directory recursively and return all files
+   * Walk a directory and return all files
    * @param {string} _dirPath - Directory path to walk
+   * @param {object} _options - Walk options
+   * @param {boolean} _options.recursive - Whether to recurse into subdirectories (default: false)
    * @returns {AsyncGenerator<string>} - Yields file paths
    */
   // eslint-disable-next-line require-yield
-  async *walkDirectory(_dirPath) {
+  async *walkDirectory(_dirPath, _options) {
     throw new Error('Method not implemented');
   }
 

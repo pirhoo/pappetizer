@@ -7,25 +7,28 @@ import { FileSystemPort } from '../../domain/ports/FileSystemPort.js';
  */
 export class FileSystemAdapter extends FileSystemPort {
   /**
-   * Walk a directory recursively and yield file paths
+   * Walk a directory and yield file paths
    * @param {string} dirPath - Directory to walk
+   * @param {object} options - Walk options
+   * @param {boolean} options.recursive - Whether to recurse into subdirectories (default: false)
    * @yields {string} - File paths
    */
-  async *walkDirectory(dirPath) {
+  async *walkDirectory(dirPath, options = {}) {
+    const { recursive = false } = options;
     const resolvedPath = path.resolve(dirPath);
-    yield* this._walkRecursive(resolvedPath);
+    yield* this._walk(resolvedPath, recursive);
   }
 
-  async *_walkRecursive(dirPath) {
+  async *_walk(dirPath, recursive) {
     const entries = await fs.readdir(dirPath, { withFileTypes: true });
 
     for (const entry of entries) {
       const fullPath = path.join(dirPath, entry.name);
 
       if (entry.isDirectory()) {
-        // Skip hidden directories
-        if (!entry.name.startsWith('.')) {
-          yield* this._walkRecursive(fullPath);
+        // Only recurse if recursive option is enabled
+        if (recursive && !entry.name.startsWith('.')) {
+          yield* this._walk(fullPath, recursive);
         }
       } else if (entry.isFile()) {
         // Skip hidden files
