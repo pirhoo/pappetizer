@@ -90,7 +90,7 @@ function printStats(stats, options = {}) {
     statsLine.push(`${c.red}Errors${c.reset} ${stats.errors.length}`);
   }
 
-  console.log(`  ${statsLine.join('  ${c.dim}│${c.reset}  ')}`);
+  console.log(`  ${statsLine.join(`  ${c.dim}│${c.reset}  `)}`);
 
   if (stats.errors.length > 0 && verbose) {
     console.log('');
