@@ -26,9 +26,6 @@ export class Configuration {
     // Skip files smaller than (bytes) - helps skip thumbnails
     minFileSize = 1024,
 
-    // Custom vendor aliases (user-defined mappings)
-    vendorAliases = {},
-
     // Directories to skip
     skipDirectories = ['node_modules', '.git', '__pycache__', '.DS_Store'],
 
@@ -52,7 +49,6 @@ export class Configuration {
     this.supportedExtensions = supportedExtensions;
     this.ocrLanguage = ocrLanguage;
     this.minFileSize = minFileSize;
-    this.vendorAliases = vendorAliases;
     this.skipDirectories = skipDirectories;
     this.recursive = recursive;
     this.dryRun = dryRun;
@@ -147,7 +143,6 @@ export class Configuration {
       supportedExtensions: this.supportedExtensions,
       ocrLanguage: this.ocrLanguage,
       minFileSize: this.minFileSize,
-      vendorAliases: this.vendorAliases,
       skipDirectories: this.skipDirectories,
       recursive: this.recursive,
       dryRun: this.dryRun,
