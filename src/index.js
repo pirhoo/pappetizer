@@ -11,14 +11,100 @@ import { PdfReaderAdapter } from './adapters/secondary/PdfReaderAdapter.js';
 import { ManifestAdapter } from './adapters/secondary/ManifestAdapter.js';
 import { ConfigurationAdapter } from './adapters/secondary/ConfigurationAdapter.js';
 import { LlmAdapter } from './adapters/secondary/LlmAdapter.js';
+import { MemoryAdapter } from './adapters/secondary/MemoryAdapter.js';
 import { UserPromptAdapter } from './adapters/primary/UserPromptAdapter.js';
+import {
+  colors as c,
+  symbols,
+  header,
+  box,
+  keyValue,
+  divider,
+  badge,
+  timestamp,
+} from './adapters/primary/ui.js';
 
 const program = new Command();
 
+// App info
+const APP_NAME = 'pappetizer';
+const APP_VERSION = '1.0.0';
+const APP_DESCRIPTION = 'Receipt File Renamer';
+
+/**
+ * Print the app header
+ */
+function printHeader() {
+  console.log('');
+  console.log(`  ${c.bold}${c.cyan}${APP_NAME}${c.reset} ${c.dim}v${APP_VERSION}${c.reset}`);
+  console.log(`  ${c.dim}${APP_DESCRIPTION}${c.reset}`);
+  console.log('');
+}
+
+/**
+ * Print a section header
+ */
+function printSection(title) {
+  console.log(`  ${c.bold}${title}${c.reset}`);
+  console.log('');
+}
+
+/**
+ * Print stats summary
+ */
+function printStats(stats, options = {}) {
+  const { verbose = false } = options;
+
+  console.log('');
+  console.log(`  ${c.bold}Summary${c.reset}`);
+  console.log('');
+
+  // Stats table
+  const statsLine = [
+    `${c.dim}Processed${c.reset} ${c.bold}${stats.processed}${c.reset}`,
+    `${c.green}Renamed${c.reset} ${c.bold}${stats.renamed}${c.reset}`,
+    `${c.dim}Skipped${c.reset} ${stats.skipped}`,
+  ];
+
+  if (stats.errors.length > 0) {
+    statsLine.push(`${c.red}Errors${c.reset} ${stats.errors.length}`);
+  }
+
+  console.log(`  ${statsLine.join('  ${c.dim}│${c.reset}  ')}`);
+
+  if (stats.errors.length > 0 && verbose) {
+    console.log('');
+    console.log(`  ${c.bold}${c.red}Errors${c.reset}`);
+    for (const error of stats.errors) {
+      console.log(`  ${c.red}${symbols.error}${c.reset} ${error}`);
+    }
+  }
+
+  console.log('');
+}
+
+/**
+ * Print active flags/options
+ */
+function printFlags(flags) {
+  const activeFlags = [];
+
+  if (flags.dryRun) activeFlags.push(badge('DRY RUN', 'warning'));
+  if (flags.recursive) activeFlags.push(badge('RECURSIVE', 'info'));
+  if (flags.watch) activeFlags.push(badge('WATCH', 'primary'));
+  if (flags.llm) activeFlags.push(badge('LLM', 'success'));
+  if (flags.yes) activeFlags.push(badge('AUTO', 'default'));
+
+  if (activeFlags.length > 0) {
+    console.log(`  ${activeFlags.join(' ')}`);
+    console.log('');
+  }
+}
+
 program
-  .name('pappetizer')
-  .description('CLI tool to rename receipt files by extracting vendor, date, and amount')
-  .version('1.0.0');
+  .name(APP_NAME)
+  .description(`CLI tool to rename receipt files by extracting vendor, date, and amount`)
+  .version(APP_VERSION);
 
 // Configure subcommand
 program
@@ -28,6 +114,8 @@ program
   .action(async () => {
     const configAdapter = new ConfigurationAdapter();
     const promptAdapter = new UserPromptAdapter();
+
+    printHeader();
 
     const useCase = new ConfigureUseCase({
       configAdapter,
@@ -60,10 +148,11 @@ program
     const dirPath = path.resolve(directory);
     const userPrompt = new UserPromptAdapter();
 
-    userPrompt.log('');
-    userPrompt.log('\x1b[36m\x1b[1m  Pappetizer\x1b[0m \x1b[2m— Receipt File Renamer\x1b[0m');
-    userPrompt.log('');
-    userPrompt.log(`  \x1b[2mDirectory:\x1b[0m ${dirPath}`);
+    printHeader();
+
+    // Show directory
+    console.log(`  ${c.dim}Directory${c.reset}  ${dirPath}`);
+    console.log('');
 
     // Load configuration
     const configAdapter = new ConfigurationAdapter();
@@ -85,16 +174,24 @@ program
     let llmAdapter = null;
     if (useLlm && apiKey) {
       llmAdapter = new LlmAdapter(apiKey, llmModel);
-      userPrompt.info(`LLM extraction enabled \x1b[2m(${llmModel})\x1b[0m`);
     } else if (useLlm && !apiKey) {
-      userPrompt.warn('LLM extraction requested but no API key provided. Using heuristics only.');
+      userPrompt.warn('LLM requested but no API key provided. Using heuristics.');
     }
-    userPrompt.log('');
+
+    // Print active flags
+    printFlags({
+      dryRun: options.dryRun,
+      recursive: options.recursive,
+      watch: options.watch,
+      llm: llmAdapter !== null,
+      yes: options.yes,
+    });
 
     const fileSystemAdapter = new FileSystemAdapter();
     const ocrAdapter = new OcrAdapter();
     const pdfReaderAdapter = new PdfReaderAdapter();
     const manifestAdapter = new ManifestAdapter();
+    const memoryAdapter = new MemoryAdapter(configAdapter, configuration);
 
     const createUseCase = () => new RenameReceiptsUseCase({
       fileSystemAdapter,
@@ -103,6 +200,7 @@ program
       manifestAdapter,
       userPromptAdapter: userPrompt,
       llmAdapter,
+      memoryAdapter,
       configuration,
     });
 
@@ -112,38 +210,17 @@ program
       recursive: options.recursive,
     };
 
-    const printStats = (stats) => {
-      userPrompt.log('');
-      userPrompt.log('\x1b[36m\x1b[1m  Summary\x1b[0m');
-      userPrompt.log('');
-      userPrompt.log(`    Processed   \x1b[1m${stats.processed}\x1b[0m`);
-      userPrompt.log(`    Renamed     \x1b[32m${stats.renamed}\x1b[0m`);
-      userPrompt.log(`    Skipped     \x1b[2m${stats.skipped}\x1b[0m`);
-
-      if (stats.errors.length > 0) {
-        userPrompt.log(`    Errors      \x1b[31m${stats.errors.length}\x1b[0m`);
-
-        if (options.verbose) {
-          userPrompt.log('');
-          for (const error of stats.errors) {
-            userPrompt.error(error);
-          }
-        }
-      }
-
-      userPrompt.log('');
-    };
-
     try {
       // Initial run
       const useCase = createUseCase();
       const stats = await useCase.execute(dirPath, executeOptions);
-      printStats(stats);
+      printStats(stats, { verbose: options.verbose });
 
       // Watch mode
       if (options.watch) {
-        userPrompt.info('Watching for new files... (Press Ctrl+C to stop)');
-        userPrompt.log('');
+        console.log(`  ${c.cyan}${symbols.info}${c.reset} Watching for new files...`);
+        console.log(`  ${c.dim}Press Ctrl+C to stop${c.reset}`);
+        console.log('');
 
         const watchOptions = { recursive: options.recursive };
         let debounceTimers = new Map();
@@ -162,7 +239,7 @@ program
             // Check if file still exists (might have been moved/deleted)
             if (!fs.existsSync(filePath)) continue;
 
-            userPrompt.log(`\x1b[2m[${new Date().toLocaleTimeString()}]\x1b[0m New file detected: ${path.basename(filePath)}`);
+            console.log(`  ${timestamp()} ${c.cyan}${symbols.arrowRight}${c.reset} ${path.basename(filePath)}`);
 
             // Clear manifest cache to pick up any changes
             manifestAdapter.clearCache();
@@ -170,16 +247,15 @@ program
             const watchUseCase = createUseCase();
             const result = await watchUseCase.processFile(filePath, executeOptions);
 
-            if (result.renamed) {
-              userPrompt.log('');
-            } else if (result.error) {
-              userPrompt.log('');
+            if (result.error) {
+              userPrompt.error(result.error);
             }
           }
 
           isProcessing = false;
-          userPrompt.info('Watching for new files... (Press Ctrl+C to stop)');
-          userPrompt.log('');
+          console.log('');
+          console.log(`  ${c.cyan}${symbols.info}${c.reset} Watching for new files...`);
+          console.log('');
         };
 
         const watcher = fs.watch(dirPath, watchOptions, (eventType, filename) => {
@@ -212,12 +288,14 @@ program
 
         // Handle graceful shutdown
         const cleanup = () => {
-          userPrompt.log('');
-          userPrompt.info('Stopping watcher...');
+          console.log('');
+          console.log(`  ${c.dim}Stopping watcher...${c.reset}`);
           watcher.close();
           for (const timer of debounceTimers.values()) {
             clearTimeout(timer);
           }
+          console.log(`  ${c.green}${symbols.success}${c.reset} Done`);
+          console.log('');
           process.exit(0);
         };
 
@@ -232,6 +310,32 @@ program
       process.exit(1);
     }
   });
+
+// Help command customization
+program.configureHelp({
+  sortSubcommands: true,
+  subcommandTerm: (cmd) => cmd.name(),
+});
+
+// Custom help output
+program.addHelpText('beforeAll', () => {
+  console.log('');
+  console.log(`  ${c.bold}${c.cyan}${APP_NAME}${c.reset} ${c.dim}v${APP_VERSION}${c.reset}`);
+  console.log(`  ${c.dim}${APP_DESCRIPTION}${c.reset}`);
+  return '';
+});
+
+program.addHelpText('afterAll', () => {
+  console.log('');
+  console.log(`  ${c.dim}Examples:${c.reset}`);
+  console.log(`    $ ${APP_NAME} clean ./receipts`);
+  console.log(`    $ ${APP_NAME} clean ./receipts --dry-run`);
+  console.log(`    $ ${APP_NAME} clean ./receipts -r -y`);
+  console.log(`    $ ${APP_NAME} clean ./receipts --watch`);
+  console.log(`    $ ${APP_NAME} configure`);
+  console.log('');
+  return '';
+});
 
 // Default command when no subcommand is provided
 program
