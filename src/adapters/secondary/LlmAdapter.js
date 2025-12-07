@@ -27,11 +27,22 @@ export class LlmAdapter extends LlmPort {
   /**
    * Extract receipt data using Claude
    * @param {string} text - OCR text from receipt
+   * @param {object} vendorAliases - Optional vendor aliases for context
    * @returns {Promise<{vendor: string|null, date: Date|null, amount: number|null, currency: string|null}>}
    */
-  async extractReceiptData(text) {
+  async extractReceiptData(text, vendorAliases = {}) {
     if (!this.isAvailable()) {
       throw new Error('LLM not configured. Please provide an Anthropic API key.');
+    }
+
+    // Build vendor aliases context if available
+    let aliasesContext = '';
+    const aliasEntries = Object.entries(vendorAliases);
+    if (aliasEntries.length > 0) {
+      const aliasesList = aliasEntries
+        .map(([from, to]) => `- "${from}" should be "${to}"`)
+        .join('\n');
+      aliasesContext = `\n\nUser-preferred vendor name mappings (apply these when relevant):\n${aliasesList}`;
     }
 
     const systemPrompt = `You are a receipt data extraction assistant. Your task is to extract structured data from receipt text.
@@ -56,7 +67,7 @@ Important rules:
 - For amount, extract the TOTAL or final amount paid, not subtotals or individual items
 - For currency, infer from symbols ($, €, £, Fr., CHF) or context
 - If you cannot confidently determine a value, use null
-- Do not include any explanation, only the JSON object`;
+- Do not include any explanation, only the JSON object${aliasesContext}`;
 
     const userPrompt = `Extract receipt data from this text:\n\n${text}`;
 
