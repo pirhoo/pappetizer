@@ -30,6 +30,7 @@ export class UserPromptAdapter extends UserPromptPort {
     const vendorVal = extractedData.vendor;
     const amountVal = extractedData.amount != null ? extractedData.amount.toFixed(2) : null;
     const currencyVal = extractedData.currency;
+    const confidenceVal = extractedData.confidence;
 
     // Build the extracted data display
     const extractedLines = [
@@ -37,6 +38,15 @@ export class UserPromptAdapter extends UserPromptPort {
       keyValue('Date', dateVal || `${c.dim}not detected${c.reset}`, { keyColor: c.cyan, keyWidth: 10 }),
       keyValue('Amount', amountVal ? `${amountVal} ${currencyVal || ''}`.trim() : `${c.dim}not detected${c.reset}`, { keyColor: c.cyan, keyWidth: 10 }),
     ];
+
+    // Add confidence score if available
+    if (confidenceVal != null) {
+      const confidencePercent = Math.round(confidenceVal * 100);
+      let confidenceColor = c.red;
+      if (confidencePercent >= 70) confidenceColor = c.green;
+      else if (confidencePercent >= 50) confidenceColor = c.yellow;
+      extractedLines.push(keyValue('Confidence', `${confidenceColor}${confidencePercent}%${c.reset}`, { keyColor: c.cyan, keyWidth: 10 }));
+    }
 
     console.log('');
     console.log(box(
