@@ -32,6 +32,16 @@ export class ManifestPort {
   }
 
   /**
+   * Check if a filename is the result of a previous rename operation
+   * @param {string} _dirPath - Directory path
+   * @param {string} _filename - Filename to check
+   * @returns {Promise<boolean>}
+   */
+  async isRenameResult(_dirPath, _filename) {
+    throw new Error('Method not implemented');
+  }
+
+  /**
    * Add a rename entry to the manifest
    * @param {string} _dirPath - Directory path
    * @param {string} _originalName - Original filename

@@ -84,6 +84,22 @@ export class ManifestAdapter extends ManifestPort {
   }
 
   /**
+   * Check if a filename is the result of a previous rename operation
+   * @param {string} dirPath - Directory path
+   * @param {string} filename - Filename to check
+   * @returns {Promise<boolean>}
+   */
+  async isRenameResult(dirPath, filename) {
+    const entries = await this.load(dirPath);
+    for (const entry of entries.values()) {
+      if (entry.newName === filename) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /**
    * Add a rename entry to the manifest
    * @param {string} dirPath - Directory path
    * @param {string} originalName - Original filename
