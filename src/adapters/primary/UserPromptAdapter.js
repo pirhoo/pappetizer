@@ -1,26 +1,23 @@
-import inquirer from 'inquirer';
+import { select, input, checkbox, confirm, password } from '@inquirer/prompts';
 import { UserPromptPort } from '../../domain/ports/UserPromptPort.js';
-
-// ANSI color codes
-const c = {
-  reset: '\x1b[0m',
-  bold: '\x1b[1m',
-  dim: '\x1b[2m',
-  red: '\x1b[31m',
-  green: '\x1b[32m',
-  yellow: '\x1b[33m',
-  blue: '\x1b[34m',
-  magenta: '\x1b[35m',
-  cyan: '\x1b[36m',
-  white: '\x1b[37m',
-  bgBlue: '\x1b[44m',
-  bgGreen: '\x1b[42m',
-};
+import {
+  colors as c,
+  symbols,
+  box,
+  keyValue,
+  createSpinner,
+  divider,
+} from './ui.js';
 
 /**
- * User prompt adapter using inquirer
+ * User prompt adapter using @inquirer/prompts with modern UI
  */
 export class UserPromptAdapter extends UserPromptPort {
+  constructor() {
+    super();
+    this.spinner = null;
+  }
+
   /**
    * Prompt user for rename confirmation
    * @param {string} originalName - Original filename
@@ -29,38 +26,41 @@ export class UserPromptAdapter extends UserPromptPort {
    * @returns {Promise<{action: string, customName?: string, editedFields?: object}>}
    */
   async promptForRename(originalName, suggestedName, extractedData = {}) {
-    const dateVal = this.formatDateForDisplay(extractedData.date) || '—';
-    const vendorVal = extractedData.vendor || '—';
-    const amountVal = extractedData.amount != null ? String(extractedData.amount) : '—';
-    const currencyVal = extractedData.currency || '—';
+    const dateVal = this.formatDateForDisplay(extractedData.date);
+    const vendorVal = extractedData.vendor;
+    const amountVal = extractedData.amount != null ? extractedData.amount.toFixed(2) : null;
+    const currencyVal = extractedData.currency;
+
+    // Build the extracted data display
+    const extractedLines = [
+      keyValue('Vendor', vendorVal || `${c.dim}not detected${c.reset}`, { keyColor: c.cyan, keyWidth: 10 }),
+      keyValue('Date', dateVal || `${c.dim}not detected${c.reset}`, { keyColor: c.cyan, keyWidth: 10 }),
+      keyValue('Amount', amountVal ? `${amountVal} ${currencyVal || ''}`.trim() : `${c.dim}not detected${c.reset}`, { keyColor: c.cyan, keyWidth: 10 }),
+    ];
 
     console.log('');
-    console.log(`${c.bgBlue}${c.white}${c.bold} RECEIPT ${c.reset}`);
-    console.log('');
-    console.log(`  ${c.dim}Original${c.reset}   ${originalName}`);
-    console.log(`  ${c.dim}Suggested${c.reset}  ${c.green}${suggestedName}${c.reset}`);
-    console.log('');
-    console.log(`  ${c.dim}Extracted:${c.reset}`);
-    console.log(`    ${c.yellow}Date${c.reset}      ${dateVal}`);
-    console.log(`    ${c.yellow}Vendor${c.reset}    ${vendorVal}`);
-    console.log(`    ${c.yellow}Amount${c.reset}    ${amountVal}`);
-    console.log(`    ${c.yellow}Currency${c.reset}  ${currencyVal}`);
+    console.log(box(
+      `${c.dim}From${c.reset}  ${originalName}\n${c.dim}To${c.reset}    ${c.green}${suggestedName}${c.reset}\n\n${extractedLines.join('\n')}`,
+      { title: 'RENAME', titleColor: c.cyan + c.bold, padding: 1 }
+    ));
     console.log('');
 
-    const { action } = await inquirer.prompt([
-      {
-        type: 'list',
-        name: 'action',
-        message: 'What would you like to do?',
-        choices: [
-          { name: 'Accept this suggestion', value: 'accept' },
-          { name: 'Accept all suggestions in this directory', value: 'acceptAll' },
-          { name: 'Edit fields manually', value: 'editFields' },
-          { name: 'Enter full filename manually', value: 'manual' },
-          { name: 'Skip this file', value: 'skip' },
-        ],
+    const action = await select({
+      message: `${c.bold}Action${c.reset}`,
+      choices: [
+        { name: `${c.green}${symbols.check}${c.reset}  Accept`, value: 'accept' },
+        { name: `${c.green}${symbols.check}${symbols.check}${c.reset} Accept all in directory`, value: 'acceptAll' },
+        { name: `${c.yellow}${symbols.bullet}${c.reset}  Edit fields`, value: 'editFields' },
+        { name: `${c.blue}${symbols.bullet}${c.reset}  Enter filename manually`, value: 'manual' },
+        { name: `${c.dim}${symbols.cross}  Skip${c.reset}`, value: 'skip' },
+      ],
+      theme: {
+        prefix: `${c.cyan}❯${c.reset}`,
+        style: {
+          highlight: (text) => `${c.bold}${text}${c.reset}`,
+        },
       },
-    ]);
+    });
 
     if (action === 'editFields') {
       const editedFields = await this.promptFieldEdits(extractedData);
@@ -68,23 +68,22 @@ export class UserPromptAdapter extends UserPromptPort {
     }
 
     if (action === 'manual') {
-      const { customName } = await inquirer.prompt([
-        {
-          type: 'input',
-          name: 'customName',
-          message: 'Enter new filename:',
-          default: suggestedName,
-          validate: (input) => {
-            if (!input.trim()) {
-              return 'Filename cannot be empty';
-            }
-            if (/[<>:"/\\|?*]/.test(input)) {
-              return 'Filename contains invalid characters';
-            }
-            return true;
-          },
+      const customName = await input({
+        message: `${c.bold}New filename${c.reset}`,
+        default: suggestedName,
+        theme: {
+          prefix: `${c.cyan}❯${c.reset}`,
         },
-      ]);
+        validate: (value) => {
+          if (!value.trim()) {
+            return 'Filename cannot be empty';
+          }
+          if (/[<>:"/\\|?*]/.test(value)) {
+            return 'Filename contains invalid characters';
+          }
+          return true;
+        },
+      });
 
       return { action: 'manual', customName: customName.trim() };
     }
@@ -111,131 +110,116 @@ export class UserPromptAdapter extends UserPromptPort {
    */
   async promptFieldEdits(extractedData) {
     console.log('');
-    console.log(`  ${c.cyan}Select fields to edit:${c.reset}`);
-    console.log('');
 
-    const { fieldsToEdit } = await inquirer.prompt([
-      {
-        type: 'checkbox',
-        name: 'fieldsToEdit',
-        message: 'Fields',
-        prefix: '  ',
-        choices: [
-          {
-            name: `${c.yellow}Date${c.reset}      ${c.dim}→${c.reset} ${this.formatDateForDisplay(extractedData.date) || `${c.dim}unknown${c.reset}`}`,
-            value: 'date',
-            short: 'Date',
-          },
-          {
-            name: `${c.yellow}Vendor${c.reset}    ${c.dim}→${c.reset} ${extractedData.vendor || `${c.dim}unknown${c.reset}`}`,
-            value: 'vendor',
-            short: 'Vendor',
-          },
-          {
-            name: `${c.yellow}Amount${c.reset}    ${c.dim}→${c.reset} ${extractedData.amount ?? `${c.dim}unknown${c.reset}`}`,
-            value: 'amount',
-            short: 'Amount',
-          },
-          {
-            name: `${c.yellow}Currency${c.reset}  ${c.dim}→${c.reset} ${extractedData.currency || `${c.dim}unknown${c.reset}`}`,
-            value: 'currency',
-            short: 'Currency',
-          },
-        ],
+    const fieldsToEdit = await checkbox({
+      message: `${c.bold}Select fields to edit${c.reset}`,
+      choices: [
+        {
+          name: `${c.cyan}Vendor${c.reset}    ${c.dim}${symbols.arrowRight}${c.reset} ${extractedData.vendor || `${c.dim}unknown${c.reset}`}`,
+          value: 'vendor',
+        },
+        {
+          name: `${c.cyan}Date${c.reset}      ${c.dim}${symbols.arrowRight}${c.reset} ${this.formatDateForDisplay(extractedData.date) || `${c.dim}unknown${c.reset}`}`,
+          value: 'date',
+        },
+        {
+          name: `${c.cyan}Amount${c.reset}    ${c.dim}${symbols.arrowRight}${c.reset} ${extractedData.amount ?? `${c.dim}unknown${c.reset}`}`,
+          value: 'amount',
+        },
+        {
+          name: `${c.cyan}Currency${c.reset}  ${c.dim}${symbols.arrowRight}${c.reset} ${extractedData.currency || `${c.dim}unknown${c.reset}`}`,
+          value: 'currency',
+        },
+      ],
+      theme: {
+        prefix: `${c.cyan}❯${c.reset}`,
+        style: {
+          highlight: (text) => `${c.bold}${text}${c.reset}`,
+        },
       },
-    ]);
+    });
 
     if (fieldsToEdit.length === 0) {
       return {};
     }
 
     console.log('');
-    console.log(`  ${c.cyan}Enter new values:${c.reset}`);
-    console.log('');
 
     const editedFields = {};
 
-    if (fieldsToEdit.includes('date')) {
-      const { date } = await inquirer.prompt([
-        {
-          type: 'input',
-          name: 'date',
-          message: `${c.yellow}Date${c.reset} ${c.dim}(YYYY-MM-DD)${c.reset}`,
-          prefix: '  ',
-          default: this.formatDateForDisplay(extractedData.date) || '',
-          validate: (input) => {
-            if (!input.trim()) return true;
-            if (!/^\d{4}-\d{2}-\d{2}$/.test(input)) {
-              return `${c.red}Format: YYYY-MM-DD${c.reset}`;
-            }
-            const d = new Date(input);
-            if (isNaN(d.getTime())) {
-              return `${c.red}Invalid date${c.reset}`;
-            }
-            return true;
-          },
-        },
-      ]);
-      editedFields.date = date.trim() ? new Date(date.trim()) : null;
-    }
-
     if (fieldsToEdit.includes('vendor')) {
-      const { vendor } = await inquirer.prompt([
-        {
-          type: 'input',
-          name: 'vendor',
-          message: `${c.yellow}Vendor${c.reset}`,
-          prefix: '  ',
-          default: extractedData.vendor || '',
-          validate: (input) => {
-            if (input && /[<>:"/\\|?*]/.test(input)) {
-              return `${c.red}Invalid characters in name${c.reset}`;
-            }
-            return true;
-          },
+      const vendor = await input({
+        message: `${c.cyan}Vendor${c.reset}`,
+        default: extractedData.vendor || '',
+        theme: {
+          prefix: `  ${c.dim}${symbols.arrowRight}${c.reset}`,
         },
-      ]);
+        validate: (value) => {
+          if (value && /[<>:"/\\|?*]/.test(value)) {
+            return 'Invalid characters';
+          }
+          return true;
+        },
+      });
       editedFields.vendor = vendor.trim() || null;
     }
 
-    if (fieldsToEdit.includes('amount')) {
-      const { amount } = await inquirer.prompt([
-        {
-          type: 'input',
-          name: 'amount',
-          message: `${c.yellow}Amount${c.reset}`,
-          prefix: '  ',
-          default: extractedData.amount?.toString() || '',
-          validate: (input) => {
-            if (!input.trim()) return true;
-            const num = parseFloat(input);
-            if (isNaN(num) || num < 0) {
-              return `${c.red}Must be a positive number${c.reset}`;
-            }
-            return true;
-          },
+    if (fieldsToEdit.includes('date')) {
+      const date = await input({
+        message: `${c.cyan}Date${c.reset} ${c.dim}(YYYY-MM-DD)${c.reset}`,
+        default: this.formatDateForDisplay(extractedData.date) || '',
+        theme: {
+          prefix: `  ${c.dim}${symbols.arrowRight}${c.reset}`,
         },
-      ]);
+        validate: (value) => {
+          if (!value.trim()) return true;
+          if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+            return 'Format: YYYY-MM-DD';
+          }
+          const d = new Date(value);
+          if (isNaN(d.getTime())) {
+            return 'Invalid date';
+          }
+          return true;
+        },
+      });
+      editedFields.date = date.trim() ? new Date(date.trim()) : null;
+    }
+
+    if (fieldsToEdit.includes('amount')) {
+      const amount = await input({
+        message: `${c.cyan}Amount${c.reset}`,
+        default: extractedData.amount?.toString() || '',
+        theme: {
+          prefix: `  ${c.dim}${symbols.arrowRight}${c.reset}`,
+        },
+        validate: (value) => {
+          if (!value.trim()) return true;
+          const num = parseFloat(value);
+          if (isNaN(num) || num < 0) {
+            return 'Must be a positive number';
+          }
+          return true;
+        },
+      });
       editedFields.amount = amount.trim() ? parseFloat(amount) : null;
     }
 
     if (fieldsToEdit.includes('currency')) {
-      const { currency } = await inquirer.prompt([
-        {
-          type: 'input',
-          name: 'currency',
-          message: `${c.yellow}Currency${c.reset} ${c.dim}(3 letters)${c.reset}`,
-          prefix: '  ',
-          default: extractedData.currency || '',
-          validate: (input) => {
-            if (!input.trim()) return true;
-            if (!/^[A-Za-z]{3}$/.test(input)) {
-              return `${c.red}Use 3-letter code (USD, EUR, CHF...)${c.reset}`;
-            }
-            return true;
-          },
+      const currency = await input({
+        message: `${c.cyan}Currency${c.reset} ${c.dim}(3 letters)${c.reset}`,
+        default: extractedData.currency || '',
+        theme: {
+          prefix: `  ${c.dim}${symbols.arrowRight}${c.reset}`,
         },
-      ]);
+        validate: (value) => {
+          if (!value.trim()) return true;
+          if (!/^[A-Za-z]{3}$/.test(value)) {
+            return 'Use 3-letter code';
+          }
+          return true;
+        },
+      });
       editedFields.currency = currency.trim() ? currency.trim().toUpperCase() : null;
     }
 
@@ -248,151 +232,208 @@ export class UserPromptAdapter extends UserPromptPort {
    * @returns {Promise<object>} - Configuration answers
    */
   async promptConfiguration(currentConfig) {
-    const answers = await inquirer.prompt([
-      {
-        type: 'list',
-        name: 'dateFormat',
-        message: 'Date format for filenames:',
+    console.log('');
+    console.log(`  ${c.bold}${c.cyan}Configuration Wizard${c.reset}`);
+    console.log(`  ${c.dim}Configure pappetizer settings${c.reset}`);
+    console.log('');
+    console.log(divider(40));
+    console.log('');
+
+    const theme = {
+      prefix: `${c.cyan}❯${c.reset}`,
+      style: {
+        highlight: (text) => `${c.bold}${text}${c.reset}`,
+      },
+    };
+
+    const answers = {};
+
+    answers.dateFormat = await select({
+      message: `${c.bold}Date format${c.reset}`,
+      choices: [
+        { name: 'YYYYMMDD     (20240315)', value: 'YYYYMMDD' },
+        { name: 'YYYY-MM-DD   (2024-03-15)', value: 'YYYY-MM-DD' },
+        { name: 'DD-MM-YYYY   (15-03-2024)', value: 'DD-MM-YYYY' },
+        { name: 'MM-DD-YYYY   (03-15-2024)', value: 'MM-DD-YYYY' },
+        { name: 'DD.MM.YYYY   (15.03.2024)', value: 'DD.MM.YYYY' },
+      ],
+      default: currentConfig.dateFormat,
+      theme,
+    });
+
+    answers.nameSeparator = await input({
+      message: `${c.bold}Separator${c.reset} ${c.dim}(between name parts)${c.reset}`,
+      default: currentConfig.nameSeparator,
+      theme,
+    });
+
+    answers.nameTemplate = await input({
+      message: `${c.bold}Template${c.reset} ${c.dim}({date}, {vendor}, {amount}, {currency}, {sep}, {ext})${c.reset}`,
+      default: currentConfig.nameTemplate,
+      theme,
+      validate: (value) => {
+        if (!value.includes('{date}')) return 'Must include {date}';
+        if (!value.includes('{vendor}')) return 'Must include {vendor}';
+        if (!value.includes('{amount}')) return 'Must include {amount}';
+        return true;
+      },
+    });
+
+    answers.defaultCurrency = await input({
+      message: `${c.bold}Default currency${c.reset}`,
+      default: currentConfig.defaultCurrency,
+      theme,
+      validate: (value) => {
+        if (!/^[A-Za-z]{3}$/.test(value)) {
+          return 'Use 3-letter code (USD, EUR, CHF)';
+        }
+        return true;
+      },
+    });
+
+    answers.dateLocale = await select({
+      message: `${c.bold}Date locale${c.reset} ${c.dim}(for ambiguous dates)${c.reset}`,
+      choices: [
+        { name: 'European (DD/MM/YYYY)', value: 'eu' },
+        { name: 'American (MM/DD/YYYY)', value: 'us' },
+      ],
+      default: currentConfig.dateLocale,
+      theme,
+    });
+
+    answers.ocrLanguage = await select({
+      message: `${c.bold}OCR language${c.reset}`,
+      choices: [
+        { name: 'English', value: 'eng' },
+        { name: 'German', value: 'deu' },
+        { name: 'French', value: 'fra' },
+        { name: 'Spanish', value: 'spa' },
+        { name: 'Italian', value: 'ita' },
+        { name: 'Portuguese', value: 'por' },
+        { name: 'Dutch', value: 'nld' },
+        { name: 'Japanese', value: 'jpn' },
+        { name: 'Chinese (Simplified)', value: 'chi_sim' },
+        { name: 'Chinese (Traditional)', value: 'chi_tra' },
+      ],
+      default: currentConfig.ocrLanguage,
+      theme,
+    });
+
+    answers.supportedExtensions = await input({
+      message: `${c.bold}File extensions${c.reset} ${c.dim}(comma-separated)${c.reset}`,
+      default: currentConfig.supportedExtensions.join(', '),
+      theme,
+    });
+
+    answers.minFileSize = await input({
+      message: `${c.bold}Min file size${c.reset} ${c.dim}(bytes)${c.reset}`,
+      default: currentConfig.minFileSize.toString(),
+      theme,
+      validate: (value) => {
+        const num = parseInt(value, 10);
+        if (isNaN(num) || num < 0) {
+          return 'Must be a non-negative number';
+        }
+        return true;
+      },
+    });
+
+    answers.recursive = await confirm({
+      message: `${c.bold}Recursive${c.reset} ${c.dim}(process subdirectories)${c.reset}`,
+      default: currentConfig.recursive,
+      theme,
+    });
+
+    answers.autoAcceptAll = await confirm({
+      message: `${c.bold}Auto-accept${c.reset} ${c.dim}(skip confirmations)${c.reset}`,
+      default: currentConfig.autoAcceptAll,
+      theme,
+    });
+
+    answers.dryRun = await confirm({
+      message: `${c.bold}Dry-run${c.reset} ${c.dim}(preview without renaming)${c.reset}`,
+      default: currentConfig.dryRun,
+      theme,
+    });
+
+    answers.useLlm = await confirm({
+      message: `${c.bold}Use LLM${c.reset} ${c.dim}(Claude for better extraction)${c.reset}`,
+      default: currentConfig.useLlm,
+      theme,
+    });
+
+    if (answers.useLlm) {
+      answers.anthropicApiKey = await password({
+        message: `${c.bold}API key${c.reset} ${c.dim}(leave empty to keep existing)${c.reset}`,
+        mask: '•',
+        theme,
+      });
+
+      answers.llmModel = await select({
+        message: `${c.bold}Model${c.reset}`,
         choices: [
-          { name: 'YYYYMMDD (e.g., 20240315)', value: 'YYYYMMDD' },
-          { name: 'YYYY-MM-DD (e.g., 2024-03-15)', value: 'YYYY-MM-DD' },
-          { name: 'DD-MM-YYYY (e.g., 15-03-2024)', value: 'DD-MM-YYYY' },
-          { name: 'MM-DD-YYYY (e.g., 03-15-2024)', value: 'MM-DD-YYYY' },
-          { name: 'DD.MM.YYYY (e.g., 15.03.2024)', value: 'DD.MM.YYYY' },
+          { name: `Claude 3 Haiku      ${c.dim}(fastest)${c.reset}`, value: 'claude-3-haiku-20240307' },
+          { name: `Claude 3.5 Haiku    ${c.dim}(balanced)${c.reset}`, value: 'claude-3-5-haiku-20241022' },
+          { name: `Claude 3.5 Sonnet   ${c.dim}(best quality)${c.reset}`, value: 'claude-3-5-sonnet-20241022' },
+          { name: `Claude Sonnet 4     ${c.dim}(latest)${c.reset}`, value: 'claude-sonnet-4-20250514' },
         ],
-        default: currentConfig.dateFormat,
-      },
-      {
-        type: 'input',
-        name: 'nameSeparator',
-        message: 'Separator between name parts:',
-        default: currentConfig.nameSeparator,
-      },
-      {
-        type: 'input',
-        name: 'nameTemplate',
-        message: 'Filename template (use {date}, {vendor}, {amount}, {currency}, {sep}, {ext}):',
-        default: currentConfig.nameTemplate,
-        validate: (input) => {
-          if (!input.includes('{date}')) return 'Template must include {date}';
-          if (!input.includes('{vendor}')) return 'Template must include {vendor}';
-          if (!input.includes('{amount}')) return 'Template must include {amount}';
-          return true;
-        },
-      },
-      {
-        type: 'input',
-        name: 'defaultCurrency',
-        message: 'Default currency (3-letter code):',
-        default: currentConfig.defaultCurrency,
-        validate: (input) => {
-          if (!/^[A-Za-z]{3}$/.test(input)) {
-            return 'Currency must be 3 letters (e.g., USD, EUR, CHF)';
-          }
-          return true;
-        },
-      },
-      {
-        type: 'list',
-        name: 'dateLocale',
-        message: 'Date parsing locale (for ambiguous dates like 01/02/2024):',
-        choices: [
-          { name: 'European (DD/MM/YYYY)', value: 'eu' },
-          { name: 'American (MM/DD/YYYY)', value: 'us' },
-        ],
-        default: currentConfig.dateLocale,
-      },
-      {
-        type: 'list',
-        name: 'ocrLanguage',
-        message: 'OCR language:',
-        choices: [
-          { name: 'English', value: 'eng' },
-          { name: 'German', value: 'deu' },
-          { name: 'French', value: 'fra' },
-          { name: 'Spanish', value: 'spa' },
-          { name: 'Italian', value: 'ita' },
-          { name: 'Portuguese', value: 'por' },
-          { name: 'Dutch', value: 'nld' },
-          { name: 'Japanese', value: 'jpn' },
-          { name: 'Chinese (Simplified)', value: 'chi_sim' },
-          { name: 'Chinese (Traditional)', value: 'chi_tra' },
-        ],
-        default: currentConfig.ocrLanguage,
-      },
-      {
-        type: 'input',
-        name: 'supportedExtensions',
-        message: 'File extensions to process (comma-separated):',
-        default: currentConfig.supportedExtensions.join(', '),
-      },
-      {
-        type: 'input',
-        name: 'minFileSize',
-        message: 'Minimum file size in bytes (skip smaller files):',
-        default: currentConfig.minFileSize.toString(),
-        validate: (input) => {
-          const num = parseInt(input, 10);
-          if (isNaN(num) || num < 0) {
-            return 'Must be a non-negative number';
-          }
-          return true;
-        },
-      },
-      {
-        type: 'input',
-        name: 'skipDirectories',
-        message: 'Directories to skip (comma-separated):',
-        default: currentConfig.skipDirectories.join(', '),
-      },
-      {
-        type: 'confirm',
-        name: 'recursive',
-        message: 'Process subdirectories recursively?',
-        default: currentConfig.recursive,
-      },
-      {
-        type: 'confirm',
-        name: 'autoAcceptAll',
-        message: 'Auto-accept all suggestions without prompting?',
-        default: currentConfig.autoAcceptAll,
-      },
-      {
-        type: 'confirm',
-        name: 'dryRun',
-        message: 'Dry-run mode by default (show changes without renaming)?',
-        default: currentConfig.dryRun,
-      },
-      {
-        type: 'confirm',
-        name: 'useLlm',
-        message: 'Use LLM (Claude) for enhanced data extraction? (requires Anthropic API key)',
-        default: currentConfig.useLlm,
-      },
-      {
-        type: 'password',
-        name: 'anthropicApiKey',
-        message: 'Anthropic API key (leave empty to keep existing):',
-        mask: '*',
-        when: (answers) => answers.useLlm,
-        default: '',
-      },
-      {
-        type: 'list',
-        name: 'llmModel',
-        message: 'LLM model to use:',
-        choices: [
-          { name: 'Claude 3 Haiku (fastest, cheapest)', value: 'claude-3-haiku-20240307' },
-          { name: 'Claude 3.5 Haiku (fast, good quality)', value: 'claude-3-5-haiku-20241022' },
-          { name: 'Claude 3.5 Sonnet (best quality)', value: 'claude-3-5-sonnet-20241022' },
-          { name: 'Claude Sonnet 4 (latest)', value: 'claude-sonnet-4-20250514' },
-        ],
-        when: (answers) => answers.useLlm,
         default: currentConfig.llmModel,
-      },
-    ]);
+        theme,
+      });
+    }
 
     return answers;
+  }
+
+  /**
+   * Start a spinner
+   * @param {string} text - Spinner text
+   */
+  startSpinner(text) {
+    this.spinner = createSpinner(text);
+    this.spinner.start();
+  }
+
+  /**
+   * Stop the spinner silently (just clear it)
+   */
+  stopSpinner() {
+    if (this.spinner) {
+      this.spinner.stop();
+      this.spinner = null;
+    }
+  }
+
+  /**
+   * Stop the spinner with success
+   * @param {string} text - Success text
+   */
+  stopSpinnerSuccess(text) {
+    if (this.spinner) {
+      this.spinner.success(text);
+      this.spinner = null;
+    }
+  }
+
+  /**
+   * Stop the spinner with failure
+   * @param {string} text - Failure text
+   */
+  stopSpinnerFail(text) {
+    if (this.spinner) {
+      this.spinner.fail(text);
+      this.spinner = null;
+    }
+  }
+
+  /**
+   * Update spinner text
+   * @param {string} text - New text
+   */
+  updateSpinner(text) {
+    if (this.spinner) {
+      this.spinner.update(text);
+    }
   }
 
   /**
@@ -408,7 +449,7 @@ export class UserPromptAdapter extends UserPromptPort {
    * @param {string} message - Error message
    */
   error(message) {
-    console.error(`  ${c.red}✖${c.reset} ${message}`);
+    console.error(`  ${c.red}${symbols.error}${c.reset} ${message}`);
   }
 
   /**
@@ -416,7 +457,7 @@ export class UserPromptAdapter extends UserPromptPort {
    * @param {string} message - Success message
    */
   success(message) {
-    console.log(`  ${c.green}✔${c.reset} ${message}`);
+    console.log(`  ${c.green}${symbols.success}${c.reset} ${message}`);
   }
 
   /**
@@ -424,7 +465,7 @@ export class UserPromptAdapter extends UserPromptPort {
    * @param {string} message - Warning message
    */
   warn(message) {
-    console.warn(`  ${c.yellow}⚠${c.reset} ${message}`);
+    console.warn(`  ${c.yellow}${symbols.warning}${c.reset} ${message}`);
   }
 
   /**
@@ -432,6 +473,47 @@ export class UserPromptAdapter extends UserPromptPort {
    * @param {string} message - Info message
    */
   info(message) {
-    console.log(`  ${c.blue}ℹ${c.reset} ${message}`);
+    console.log(`  ${c.blue}${symbols.info}${c.reset} ${message}`);
+  }
+
+  /**
+   * Display a dim/muted message
+   * @param {string} message - Message to display
+   */
+  dim(message) {
+    console.log(`  ${c.dim}${message}${c.reset}`);
+  }
+
+  /**
+   * Display file processing status
+   * @param {string} filename - File being processed
+   */
+  processing(filename) {
+    console.log(`\n  ${c.cyan}${symbols.arrowRight}${c.reset} ${filename}`);
+  }
+
+  /**
+   * Display rename result
+   * @param {string} from - Original filename
+   * @param {string} to - New filename
+   * @param {boolean} dryRun - Whether this is a dry run
+   */
+  renamed(from, to, dryRun = false) {
+    if (dryRun) {
+      console.log(`  ${c.yellow}${symbols.arrowRight}${c.reset} ${c.dim}Would rename:${c.reset} ${from}`);
+      console.log(`               ${c.dim}${symbols.arrowRight}${c.reset} ${c.green}${to}${c.reset}`);
+    } else {
+      console.log(`  ${c.green}${symbols.success}${c.reset} ${c.dim}Renamed:${c.reset} ${from}`);
+      console.log(`            ${c.dim}${symbols.arrowRight}${c.reset} ${c.green}${to}${c.reset}`);
+    }
+  }
+
+  /**
+   * Display skipped file
+   * @param {string} filename - Skipped filename
+   * @param {string} reason - Reason for skipping
+   */
+  skipped(filename, reason = '') {
+    console.log(`  ${c.dim}${symbols.bullet} Skipped: ${filename}${reason ? ` (${reason})` : ''}${c.reset}`);
   }
 }
