@@ -34,9 +34,9 @@ export class UserPromptAdapter extends UserPromptPort {
 
     // Build the extracted data display
     const extractedLines = [
-      keyValue('Vendor', vendorVal || `${c.dim}not detected${c.reset}`, { keyColor: c.cyan, keyWidth: 10 }),
-      keyValue('Date', dateVal || `${c.dim}not detected${c.reset}`, { keyColor: c.cyan, keyWidth: 10 }),
-      keyValue('Amount', amountVal ? `${amountVal} ${currencyVal || ''}`.trim() : `${c.dim}not detected${c.reset}`, { keyColor: c.cyan, keyWidth: 10 }),
+      keyValue('Vendor', vendorVal || `${c.dim}not detected${c.reset}`, { keyColor: c.cyan, keyWidth: 15 }),
+      keyValue('Date', dateVal || `${c.dim}not detected${c.reset}`, { keyColor: c.cyan, keyWidth: 15 }),
+      keyValue('Amount', amountVal ? `${amountVal} ${currencyVal || ''}`.trim() : `${c.dim}not detected${c.reset}`, { keyColor: c.cyan, keyWidth: 15 }),
     ];
 
     // Add confidence score if available
@@ -45,7 +45,7 @@ export class UserPromptAdapter extends UserPromptPort {
       let confidenceColor = c.red;
       if (confidencePercent >= 70) confidenceColor = c.green;
       else if (confidencePercent >= 50) confidenceColor = c.yellow;
-      extractedLines.push(keyValue('Confidence', `${confidenceColor}${confidencePercent}%${c.reset}`, { keyColor: c.cyan, keyWidth: 10 }));
+      extractedLines.push(keyValue('Confidence', `${confidenceColor}${confidencePercent}%${c.reset}`, { keyColor: c.cyan, keyWidth: 15 }));
     }
 
     console.log('');
