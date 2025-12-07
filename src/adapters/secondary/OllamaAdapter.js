@@ -125,8 +125,13 @@ Important rules:
       let content = data.response;
 
       if (data.message) {
-        // message can be { role, content } or just a string in some versions
-        content = typeof data.message === 'string' ? data.message : data.message.content;
+        // message can be { role, content, thinking } or just a string in some versions
+        // Some models put output in 'thinking' field instead of 'content'
+        if (typeof data.message === 'string') {
+          content = data.message;
+        } else {
+          content = data.message.content || data.message.thinking;
+        }
       }
 
       if (!content) {
