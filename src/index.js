@@ -82,6 +82,7 @@ function printFlags(flags) {
   if (flags.watch) activeFlags.push(badge('WATCH', 'primary'));
   if (flags.llm) activeFlags.push(badge('LLM', 'success'));
   if (flags.yes) activeFlags.push(badge('AUTO', 'default'));
+  if (flags.force) activeFlags.push(badge('FORCE', 'warning'));
 
   if (activeFlags.length > 0) {
     console.log(`  ${activeFlags.join(' ')}`);
@@ -133,6 +134,7 @@ program
   .option('--no-llm', 'Disable LLM extraction even if configured')
   .option('--model <model>', 'LLM model to use (e.g., claude-3-haiku-20240307)')
   .option('--min-confidence <value>', 'Minimum confidence (0-1) for auto-rename with --yes (default: 0.7)', parseFloat)
+  .option('-f, --force', 'Re-process files even if already in manifest')
   .action(async (targetPath, options) => {
     const resolvedPath = path.resolve(targetPath);
     const userPrompt = new UserPromptAdapter();
@@ -184,6 +186,7 @@ program
       watch: options.watch,
       llm: llmAdapter !== null,
       yes: options.yes,
+      force: options.force,
     });
 
     const fileSystemAdapter = new FileSystemAdapter();
@@ -209,6 +212,7 @@ program
       yes: options.yes,
       recursive: options.recursive,
       minConfidence: options.minConfidence,
+      force: options.force,
     };
 
     try {

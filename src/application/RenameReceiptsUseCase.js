@@ -42,6 +42,7 @@ export class RenameReceiptsUseCase {
     const recursive = options.recursive ?? this.config.recursive;
     const supportedExtensions = this.config.supportedExtensions;
     const minConfidence = options.minConfidence ?? this.config.minConfidence;
+    const force = options.force ?? false;
 
     let acceptAllInDir = autoAccept ? 'all' : null;
 
@@ -86,12 +87,14 @@ export class RenameReceiptsUseCase {
           acceptAllInDir = null;
         }
 
-        // Check if this file is the result of a previous rename (skip it)
-        const isRenameResult = await this.manifest.isRenameResult(currentDir, originalName);
-        if (isRenameResult) {
-          this.userPrompt.skipped(originalName, 'previously renamed');
-          stats.skipped++;
-          continue;
+        // Check if this file is the result of a previous rename (skip it unless forced)
+        if (!force) {
+          const isRenameResult = await this.manifest.isRenameResult(currentDir, originalName);
+          if (isRenameResult) {
+            this.userPrompt.skipped(originalName, 'previously renamed');
+            stats.skipped++;
+            continue;
+          }
         }
         // Note: We don't skip files just because their name is in the manifest as originalName.
         // If a file with that name exists, it's either a new file or the renamed file was deleted.
@@ -285,6 +288,7 @@ export class RenameReceiptsUseCase {
     const autoAccept = options.yes ?? this.config.autoAcceptAll;
     const supportedExtensions = this.config.supportedExtensions;
     const minConfidence = options.minConfidence ?? this.config.minConfidence;
+    const force = options.force ?? false;
 
     const ext = this.fileSystem.getExtension(filePath);
 
@@ -310,12 +314,14 @@ export class RenameReceiptsUseCase {
     // Initialize manifest for this directory
     await this.manifest.initialize(currentDir);
 
-    // Check if this file is the result of a previous rename (skip it)
-    const isRenameResult = await this.manifest.isRenameResult(currentDir, originalName);
-    if (isRenameResult) {
-      this.userPrompt.skipped(originalName, 'previously renamed');
-      result.skipped = true;
-      return result;
+    // Check if this file is the result of a previous rename (skip it unless forced)
+    if (!force) {
+      const isRenameResult = await this.manifest.isRenameResult(currentDir, originalName);
+      if (isRenameResult) {
+        this.userPrompt.skipped(originalName, 'previously renamed');
+        result.skipped = true;
+        return result;
+      }
     }
 
     result.processed = true;
