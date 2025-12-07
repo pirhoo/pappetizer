@@ -2,27 +2,17 @@ import fs from 'fs/promises';
 import path from 'path';
 import os from 'os';
 import { MemoryAdapter } from '../adapters/secondary/MemoryAdapter.js';
-import { ConfigurationAdapter } from '../adapters/secondary/ConfigurationAdapter.js';
-import { Configuration } from '../domain/entities/Configuration.js';
 
 describe('MemoryAdapter', () => {
   let memoryAdapter;
-  let configAdapter;
-  let configuration;
   let tempDir;
 
   beforeEach(async () => {
     // Create a unique temp directory for each test
     tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'pappetizer-memory-test-'));
 
-    // Create config adapter pointing to temp dir
-    configAdapter = new ConfigurationAdapter(tempDir);
-
-    // Create a fresh configuration
-    configuration = Configuration.getDefaults();
-
-    // Create memory adapter
-    memoryAdapter = new MemoryAdapter(configAdapter, configuration);
+    // Create memory adapter with temp dir
+    memoryAdapter = new MemoryAdapter(tempDir);
   });
 
   afterEach(async () => {
@@ -32,6 +22,13 @@ describe('MemoryAdapter', () => {
     } catch {
       // Ignore cleanup errors
     }
+  });
+
+  describe('getMemoryPath', () => {
+    it('should return correct memory path', () => {
+      const memoryPath = memoryAdapter.getMemoryPath();
+      expect(memoryPath).toBe(path.join(tempDir, 'memory.json'));
+    });
   });
 
   describe('recordVendorAlias', () => {
@@ -49,12 +46,13 @@ describe('MemoryAdapter', () => {
       expect(aliases['amazon web service']).toBe('AWS');
     });
 
-    it('should persist alias to config file', async () => {
+    it('should persist alias to memory file', async () => {
       await memoryAdapter.recordVendorAlias('Amazon Web Service', 'AWS');
 
-      // Load config from file
-      const loadedConfig = await configAdapter.load();
-      expect(loadedConfig.vendorAliases['amazon web service']).toBe('AWS');
+      // Read the file directly
+      const content = await fs.readFile(memoryAdapter.getMemoryPath(), 'utf-8');
+      const data = JSON.parse(content);
+      expect(data.vendorAliases['amazon web service']).toBe('AWS');
     });
 
     it('should not record if extracted equals corrected', async () => {
@@ -168,45 +166,102 @@ describe('MemoryAdapter', () => {
     });
   });
 
+  describe('initialize', () => {
+    it('should load existing memory from file', async () => {
+      // Write memory file directly
+      const memoryData = {
+        version: '1.0',
+        lastUpdated: new Date().toISOString(),
+        vendorAliases: {
+          'existing vendor': 'Existing Alias',
+        },
+      };
+      await fs.mkdir(tempDir, { recursive: true });
+      await fs.writeFile(
+        path.join(tempDir, 'memory.json'),
+        JSON.stringify(memoryData, null, 2)
+      );
+
+      // Create new adapter and initialize
+      const newAdapter = new MemoryAdapter(tempDir);
+      await newAdapter.initialize();
+
+      expect(newAdapter.applyVendorAlias('existing vendor')).toBe('Existing Alias');
+    });
+
+    it('should handle missing memory file gracefully', async () => {
+      const newAdapter = new MemoryAdapter(tempDir);
+      await newAdapter.initialize();
+
+      expect(newAdapter.getVendorAliases()).toEqual({});
+    });
+  });
+
   describe('persistence', () => {
     it('should persist multiple aliases', async () => {
       await memoryAdapter.recordVendorAlias('Amazon Web Service', 'AWS');
       await memoryAdapter.recordVendorAlias('Starbucks Corporation', 'Starbucks');
       await memoryAdapter.recordVendorAlias('McDonald\'s Restaurant', 'McDonalds');
 
-      // Create new adapter from persisted config
-      const loadedConfig = await configAdapter.load();
-      const newMemoryAdapter = new MemoryAdapter(configAdapter, loadedConfig);
+      // Create new adapter from persisted file
+      const newMemoryAdapter = new MemoryAdapter(tempDir);
+      await newMemoryAdapter.initialize();
 
       expect(newMemoryAdapter.applyVendorAlias('Amazon Web Service')).toBe('AWS');
       expect(newMemoryAdapter.applyVendorAlias('Starbucks Corporation')).toBe('Starbucks');
       expect(newMemoryAdapter.applyVendorAlias('McDonald\'s Restaurant')).toBe('McDonalds');
     });
 
-    it('should work with existing vendorAliases in config', async () => {
-      // Create config with pre-existing aliases
-      const existingConfig = new Configuration({
-        vendorAliases: {
-          'existing vendor': 'Existing Alias',
-        },
-      });
-      await configAdapter.save(existingConfig);
+    it('should include version and lastUpdated in memory file', async () => {
+      await memoryAdapter.recordVendorAlias('Amazon', 'AWS');
 
-      // Load and create new memory adapter
-      const loadedConfig = await configAdapter.load();
-      const newMemoryAdapter = new MemoryAdapter(configAdapter, loadedConfig);
+      const content = await fs.readFile(memoryAdapter.getMemoryPath(), 'utf-8');
+      const data = JSON.parse(content);
 
-      // Should have existing alias
-      expect(newMemoryAdapter.applyVendorAlias('existing vendor')).toBe('Existing Alias');
+      expect(data.version).toBe('1.0');
+      expect(data.lastUpdated).toBeDefined();
+      expect(new Date(data.lastUpdated)).toBeInstanceOf(Date);
+    });
 
-      // Should be able to add new alias
-      await newMemoryAdapter.recordVendorAlias('New Vendor', 'New Alias');
-      expect(newMemoryAdapter.applyVendorAlias('new vendor')).toBe('New Alias');
+    it('should create state directory if it does not exist', async () => {
+      const nestedDir = path.join(tempDir, 'nested', 'path');
+      const nestedAdapter = new MemoryAdapter(nestedDir);
 
-      // Both should be persisted
-      const reloadedConfig = await configAdapter.load();
-      expect(reloadedConfig.vendorAliases['existing vendor']).toBe('Existing Alias');
-      expect(reloadedConfig.vendorAliases['new vendor']).toBe('New Alias');
+      await nestedAdapter.recordVendorAlias('Test', 'Value');
+
+      const exists = await fs.access(nestedDir).then(() => true).catch(() => false);
+      expect(exists).toBe(true);
+    });
+  });
+
+  describe('XDG compliance', () => {
+    it('should use XDG_STATE_HOME when set', () => {
+      const originalEnv = process.env.XDG_STATE_HOME;
+      process.env.XDG_STATE_HOME = '/custom/state';
+
+      // Create adapter without custom dir to test default path
+      const adapter = new MemoryAdapter();
+      expect(adapter.stateDir).toBe('/custom/state/pappetizer');
+
+      // Restore
+      if (originalEnv) {
+        process.env.XDG_STATE_HOME = originalEnv;
+      } else {
+        delete process.env.XDG_STATE_HOME;
+      }
+    });
+
+    it('should fall back to ~/.local/state when XDG_STATE_HOME not set', () => {
+      const originalEnv = process.env.XDG_STATE_HOME;
+      delete process.env.XDG_STATE_HOME;
+
+      const adapter = new MemoryAdapter();
+      expect(adapter.stateDir).toBe(path.join(os.homedir(), '.local', 'state', 'pappetizer'));
+
+      // Restore
+      if (originalEnv) {
+        process.env.XDG_STATE_HOME = originalEnv;
+      }
     });
   });
 });

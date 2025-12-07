@@ -14,7 +14,6 @@ describe('Configuration', () => {
       expect(config.supportedExtensions).toEqual(['.pdf', '.png', '.jpg', '.jpeg', '.tiff', '.tif', '.bmp', '.gif']);
       expect(config.ocrLanguage).toBe('eng');
       expect(config.minFileSize).toBe(1024);
-      expect(config.vendorAliases).toEqual({});
       expect(config.skipDirectories).toEqual(['node_modules', '.git', '__pycache__', '.DS_Store']);
       expect(config.recursive).toBe(false);
       expect(config.dryRun).toBe(false);
@@ -34,7 +33,6 @@ describe('Configuration', () => {
         supportedExtensions: ['.pdf', '.png'],
         ocrLanguage: 'deu',
         minFileSize: 2048,
-        vendorAliases: { 'wm': 'Walmart' },
         skipDirectories: ['dist'],
         recursive: false,
         dryRun: true,
@@ -52,7 +50,6 @@ describe('Configuration', () => {
       expect(config.supportedExtensions).toEqual(['.pdf', '.png']);
       expect(config.ocrLanguage).toBe('deu');
       expect(config.minFileSize).toBe(2048);
-      expect(config.vendorAliases).toEqual({ 'wm': 'Walmart' });
       expect(config.skipDirectories).toEqual(['dist']);
       expect(config.recursive).toBe(false);
       expect(config.dryRun).toBe(true);
@@ -369,7 +366,6 @@ describe('Configuration', () => {
         supportedExtensions: ['.pdf'],
         ocrLanguage: 'fra',
         minFileSize: 500,
-        vendorAliases: { test: 'Test Corp' },
         skipDirectories: ['build'],
         recursive: false,
         dryRun: false,
@@ -387,7 +383,6 @@ describe('Configuration', () => {
       expect(config.supportedExtensions).toEqual(['.pdf']);
       expect(config.ocrLanguage).toBe('fra');
       expect(config.minFileSize).toBe(500);
-      expect(config.vendorAliases).toEqual({ test: 'Test Corp' });
       expect(config.skipDirectories).toEqual(['build']);
       expect(config.recursive).toBe(false);
       expect(config.useLlm).toBe(true);
@@ -417,7 +412,6 @@ describe('Configuration', () => {
         supportedExtensions: ['.pdf', '.png', '.jpg', '.jpeg', '.tiff', '.tif', '.bmp', '.gif'],
         ocrLanguage: 'eng',
         minFileSize: 1024,
-        vendorAliases: {},
         skipDirectories: ['node_modules', '.git', '__pycache__', '.DS_Store'],
         recursive: false,
         dryRun: false,
@@ -441,7 +435,6 @@ describe('Configuration', () => {
         'supportedExtensions',
         'ocrLanguage',
         'minFileSize',
-        'vendorAliases',
         'skipDirectories',
         'recursive',
         'dryRun',
@@ -463,21 +456,6 @@ describe('Configuration', () => {
       expect(json.skipDirectories).toEqual(['dist', 'build']);
     });
 
-    it('should preserve object values correctly', () => {
-      const config = new Configuration({
-        vendorAliases: {
-          'wmt': 'Walmart',
-          'sbux': 'Starbucks',
-        },
-      });
-
-      const json = config.toJSON();
-
-      expect(json.vendorAliases).toEqual({
-        'wmt': 'Walmart',
-        'sbux': 'Starbucks',
-      });
-    });
   });
 
   describe('getDefaults', () => {
@@ -510,7 +488,6 @@ describe('Configuration', () => {
         supportedExtensions: ['.pdf'],
         ocrLanguage: 'deu',
         minFileSize: 512,
-        vendorAliases: { 'test': 'Test Corp' },
         skipDirectories: ['build'],
         recursive: false,
         dryRun: true,
@@ -531,7 +508,6 @@ describe('Configuration', () => {
       expect(restored.supportedExtensions).toEqual(original.supportedExtensions);
       expect(restored.ocrLanguage).toBe(original.ocrLanguage);
       expect(restored.minFileSize).toBe(original.minFileSize);
-      expect(restored.vendorAliases).toEqual(original.vendorAliases);
       expect(restored.skipDirectories).toEqual(original.skipDirectories);
       expect(restored.recursive).toBe(original.recursive);
       expect(restored.dryRun).toBe(original.dryRun);
@@ -574,19 +550,6 @@ describe('Configuration', () => {
 
       expect(config.supportedExtensions).toEqual([]);
       expect(config.skipDirectories).toEqual([]);
-    });
-
-    it('should handle complex vendor aliases', () => {
-      const config = new Configuration({
-        vendorAliases: {
-          'mc': "McDonald's",
-          'bk': 'Burger King',
-          'wm-super': 'Walmart Supercenter',
-        },
-      });
-
-      expect(config.vendorAliases['mc']).toBe("McDonald's");
-      expect(config.vendorAliases['wm-super']).toBe('Walmart Supercenter');
     });
 
     it('should handle boolean-like values', () => {
