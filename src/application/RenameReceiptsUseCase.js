@@ -37,6 +37,7 @@ export class RenameReceiptsUseCase {
     // Merge options with config (options take precedence)
     const dryRun = options.dryRun ?? this.config.dryRun;
     const autoAccept = options.yes ?? this.config.autoAcceptAll;
+    const recursive = options.recursive ?? this.config.recursive;
     const supportedExtensions = this.config.supportedExtensions;
 
     let acceptAllInDir = autoAccept ? 'all' : null;
@@ -54,7 +55,7 @@ export class RenameReceiptsUseCase {
     }
 
     try {
-      for await (const filePath of this.fileSystem.walkDirectory(dirPath)) {
+      for await (const filePath of this.fileSystem.walkDirectory(dirPath, { recursive })) {
         const ext = this.fileSystem.getExtension(filePath);
 
         if (!supportedExtensions.includes(ext)) {
@@ -82,21 +83,15 @@ export class RenameReceiptsUseCase {
           acceptAllInDir = null;
         }
 
-        // Check if already processed (original name was renamed before)
-        const alreadyRenamed = await this.manifest.hasBeenRenamed(currentDir, originalName);
-        if (alreadyRenamed) {
-          this.userPrompt.log(`Skipping (already processed): ${originalName}`);
-          stats.skipped++;
-          continue;
-        }
-
-        // Check if this file is the result of a previous rename
+        // Check if this file is the result of a previous rename (skip it)
         const isRenameResult = await this.manifest.isRenameResult(currentDir, originalName);
         if (isRenameResult) {
           this.userPrompt.log(`Skipping (previously renamed): ${originalName}`);
           stats.skipped++;
           continue;
         }
+        // Note: We don't skip files just because their name is in the manifest as originalName.
+        // If a file with that name exists, it's either a new file or the renamed file was deleted.
 
         stats.processed++;
         this.userPrompt.log(`\nProcessing: ${filePath}`);
