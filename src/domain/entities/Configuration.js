@@ -37,8 +37,11 @@ export class Configuration {
 
     // LLM settings for enhanced extraction
     useLlm = false,
+    llmProvider = 'anthropic', // 'anthropic', 'openai', 'ollama'
     anthropicApiKey = null,
-    llmModel = 'claude-3-haiku-20240307',
+    openaiApiKey = null,
+    ollamaHost = 'http://localhost:11434',
+    llmModel = null, // null means use provider default
 
     // Minimum confidence score (0-1) required for auto-rename with --yes flag
     minConfidence = 0.7,
@@ -56,7 +59,10 @@ export class Configuration {
     this.recursive = recursive;
     this.dryRun = dryRun;
     this.useLlm = useLlm;
+    this.llmProvider = llmProvider;
     this.anthropicApiKey = anthropicApiKey;
+    this.openaiApiKey = openaiApiKey;
+    this.ollamaHost = ollamaHost;
     this.llmModel = llmModel;
     this.minConfidence = minConfidence;
   }
@@ -105,18 +111,46 @@ export class Configuration {
     }
 
     // Validate LLM settings
-    if (this.useLlm && !this.anthropicApiKey) {
-      errors.push('Anthropic API key is required when LLM extraction is enabled');
+    const validLlmProviders = ['anthropic', 'openai', 'ollama'];
+    if (!validLlmProviders.includes(this.llmProvider)) {
+      errors.push(`Invalid LLM provider: ${this.llmProvider}. Valid providers: ${validLlmProviders.join(', ')}`);
     }
 
-    const validLlmModels = [
-      'claude-3-haiku-20240307',
-      'claude-3-5-haiku-20241022',
-      'claude-3-5-sonnet-20241022',
-      'claude-sonnet-4-20250514',
-    ];
-    if (this.llmModel && !validLlmModels.includes(this.llmModel)) {
-      errors.push(`Invalid LLM model: ${this.llmModel}. Valid models: ${validLlmModels.join(', ')}`);
+    if (this.useLlm) {
+      if (this.llmProvider === 'anthropic' && !this.anthropicApiKey) {
+        errors.push('Anthropic API key is required when using Anthropic provider');
+      }
+      if (this.llmProvider === 'openai' && !this.openaiApiKey) {
+        errors.push('OpenAI API key is required when using OpenAI provider');
+      }
+      if (this.llmProvider === 'ollama' && !this.ollamaHost) {
+        errors.push('Ollama host is required when using Ollama provider');
+      }
+    }
+
+    // Validate model if specified (provider-specific validation)
+    if (this.llmModel) {
+      const validModels = {
+        anthropic: [
+          'claude-3-haiku-20240307',
+          'claude-3-5-haiku-20241022',
+          'claude-3-5-sonnet-20241022',
+          'claude-sonnet-4-20250514',
+        ],
+        openai: [
+          'gpt-4o',
+          'gpt-4o-mini',
+          'gpt-4-turbo',
+          'gpt-4',
+          'gpt-3.5-turbo',
+        ],
+        ollama: [], // Ollama accepts any model name
+      };
+
+      const providerModels = validModels[this.llmProvider] || [];
+      if (providerModels.length > 0 && !providerModels.includes(this.llmModel)) {
+        errors.push(`Invalid LLM model for ${this.llmProvider}: ${this.llmModel}. Valid models: ${providerModels.join(', ')}`);
+      }
     }
 
     // Validate minConfidence
@@ -156,7 +190,10 @@ export class Configuration {
       recursive: this.recursive,
       dryRun: this.dryRun,
       useLlm: this.useLlm,
+      llmProvider: this.llmProvider,
       anthropicApiKey: this.anthropicApiKey,
+      openaiApiKey: this.openaiApiKey,
+      ollamaHost: this.ollamaHost,
       llmModel: this.llmModel,
       minConfidence: this.minConfidence,
     };

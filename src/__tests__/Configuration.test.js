@@ -18,8 +18,11 @@ describe('Configuration', () => {
       expect(config.recursive).toBe(false);
       expect(config.dryRun).toBe(false);
       expect(config.useLlm).toBe(false);
+      expect(config.llmProvider).toBe('anthropic');
       expect(config.anthropicApiKey).toBeNull();
-      expect(config.llmModel).toBe('claude-3-haiku-20240307');
+      expect(config.openaiApiKey).toBeNull();
+      expect(config.ollamaHost).toBe('http://localhost:11434');
+      expect(config.llmModel).toBeNull();
     });
 
     it('should create configuration with custom values', () => {
@@ -37,8 +40,11 @@ describe('Configuration', () => {
         recursive: false,
         dryRun: true,
         useLlm: true,
+        llmProvider: 'openai',
         anthropicApiKey: 'sk-test-key',
-        llmModel: 'claude-3-5-sonnet-20241022',
+        openaiApiKey: 'sk-openai-key',
+        ollamaHost: 'http://myhost:11434',
+        llmModel: 'gpt-4o',
       });
 
       expect(config.dateFormat).toBe('YYYY-MM-DD');
@@ -54,8 +60,11 @@ describe('Configuration', () => {
       expect(config.recursive).toBe(false);
       expect(config.dryRun).toBe(true);
       expect(config.useLlm).toBe(true);
+      expect(config.llmProvider).toBe('openai');
       expect(config.anthropicApiKey).toBe('sk-test-key');
-      expect(config.llmModel).toBe('claude-3-5-sonnet-20241022');
+      expect(config.openaiApiKey).toBe('sk-openai-key');
+      expect(config.ollamaHost).toBe('http://myhost:11434');
+      expect(config.llmModel).toBe('gpt-4o');
     });
 
     it('should allow partial custom values with defaults for rest', () => {
@@ -245,18 +254,40 @@ describe('Configuration', () => {
     });
 
     describe('LLM settings validation', () => {
-      it('should require API key when LLM is enabled', () => {
+      it('should require Anthropic API key when using anthropic provider', () => {
         const config = new Configuration({
           useLlm: true,
+          llmProvider: 'anthropic',
           anthropicApiKey: null,
         });
         const result = config.validate();
-        expect(result.errors).toContainEqual(expect.stringContaining('API key is required'));
+        expect(result.errors).toContainEqual(expect.stringContaining('Anthropic API key is required'));
+      });
+
+      it('should require OpenAI API key when using openai provider', () => {
+        const config = new Configuration({
+          useLlm: true,
+          llmProvider: 'openai',
+          openaiApiKey: null,
+        });
+        const result = config.validate();
+        expect(result.errors).toContainEqual(expect.stringContaining('OpenAI API key is required'));
+      });
+
+      it('should require Ollama host when using ollama provider', () => {
+        const config = new Configuration({
+          useLlm: true,
+          llmProvider: 'ollama',
+          ollamaHost: null,
+        });
+        const result = config.validate();
+        expect(result.errors).toContainEqual(expect.stringContaining('Ollama host is required'));
       });
 
       it('should accept valid configuration when LLM is enabled with API key', () => {
         const config = new Configuration({
           useLlm: true,
+          llmProvider: 'anthropic',
           anthropicApiKey: 'sk-ant-test-key',
         });
         const result = config.validate();
@@ -272,7 +303,23 @@ describe('Configuration', () => {
         expect(result.errors.some(e => e.includes('API key'))).toBe(false);
       });
 
-      it('should accept all valid LLM models', () => {
+      it('should accept all valid LLM providers', () => {
+        const validProviders = ['anthropic', 'openai', 'ollama'];
+
+        for (const provider of validProviders) {
+          const config = new Configuration({ llmProvider: provider });
+          const result = config.validate();
+          expect(result.errors.some(e => e.includes('Invalid LLM provider'))).toBe(false);
+        }
+      });
+
+      it('should reject invalid LLM provider', () => {
+        const config = new Configuration({ llmProvider: 'gemini' });
+        const result = config.validate();
+        expect(result.errors.some(e => e.includes('Invalid LLM provider'))).toBe(true);
+      });
+
+      it('should accept all valid Anthropic models', () => {
         const validModels = [
           'claude-3-haiku-20240307',
           'claude-3-5-haiku-20241022',
@@ -281,26 +328,46 @@ describe('Configuration', () => {
         ];
 
         for (const model of validModels) {
-          const config = new Configuration({ llmModel: model });
+          const config = new Configuration({ llmProvider: 'anthropic', llmModel: model });
           const result = config.validate();
           expect(result.errors.some(e => e.includes('Invalid LLM model'))).toBe(false);
         }
       });
 
-      it('should reject invalid LLM models', () => {
-        const invalidModels = [
+      it('should accept all valid OpenAI models', () => {
+        const validModels = [
+          'gpt-4o',
+          'gpt-4o-mini',
+          'gpt-4-turbo',
           'gpt-4',
-          'claude-2',
-          'claude-instant',
-          'invalid-model',
-          'claude-3-opus-20240229', // Not in valid list
+          'gpt-3.5-turbo',
         ];
 
-        for (const model of invalidModels) {
-          const config = new Configuration({ llmModel: model });
+        for (const model of validModels) {
+          const config = new Configuration({ llmProvider: 'openai', llmModel: model });
           const result = config.validate();
-          expect(result.errors.some(e => e.includes('Invalid LLM model'))).toBe(true);
+          expect(result.errors.some(e => e.includes('Invalid LLM model'))).toBe(false);
         }
+      });
+
+      it('should accept any model for Ollama provider', () => {
+        const models = ['llama3.2', 'mistral', 'codellama', 'custom-model'];
+
+        for (const model of models) {
+          const config = new Configuration({ llmProvider: 'ollama', llmModel: model });
+          const result = config.validate();
+          expect(result.errors.some(e => e.includes('Invalid LLM model'))).toBe(false);
+        }
+      });
+
+      it('should reject invalid models for specific provider', () => {
+        // OpenAI model with Anthropic provider
+        const config = new Configuration({
+          llmProvider: 'anthropic',
+          llmModel: 'gpt-4o',
+        });
+        const result = config.validate();
+        expect(result.errors.some(e => e.includes('Invalid LLM model for anthropic'))).toBe(true);
       });
 
       it('should allow null LLM model', () => {
@@ -319,6 +386,7 @@ describe('Configuration', () => {
         minFileSize: -1,
         nameTemplate: 'no-placeholders',
         useLlm: true,
+        llmProvider: 'anthropic',
         anthropicApiKey: null,
         llmModel: 'invalid-model',
       });
@@ -370,8 +438,11 @@ describe('Configuration', () => {
         recursive: false,
         dryRun: false,
         useLlm: true,
+        llmProvider: 'openai',
         anthropicApiKey: 'test-key',
-        llmModel: 'claude-3-5-sonnet-20241022',
+        openaiApiKey: 'openai-key',
+        ollamaHost: 'http://custom:11434',
+        llmModel: 'gpt-4o',
       };
 
       const config = Configuration.fromJSON(json);
@@ -386,8 +457,11 @@ describe('Configuration', () => {
       expect(config.skipDirectories).toEqual(['build']);
       expect(config.recursive).toBe(false);
       expect(config.useLlm).toBe(true);
+      expect(config.llmProvider).toBe('openai');
       expect(config.anthropicApiKey).toBe('test-key');
-      expect(config.llmModel).toBe('claude-3-5-sonnet-20241022');
+      expect(config.openaiApiKey).toBe('openai-key');
+      expect(config.ollamaHost).toBe('http://custom:11434');
+      expect(config.llmModel).toBe('gpt-4o');
     });
   });
 
@@ -416,8 +490,11 @@ describe('Configuration', () => {
         recursive: false,
         dryRun: false,
         useLlm: true,
+        llmProvider: 'anthropic',
         anthropicApiKey: 'secret-key',
-        llmModel: 'claude-3-haiku-20240307',
+        openaiApiKey: null,
+        ollamaHost: 'http://localhost:11434',
+        llmModel: null,
         minConfidence: 0.7,
       });
     });
@@ -440,7 +517,10 @@ describe('Configuration', () => {
         'recursive',
         'dryRun',
         'useLlm',
+        'llmProvider',
         'anthropicApiKey',
+        'openaiApiKey',
+        'ollamaHost',
         'llmModel',
         'minConfidence',
       ]);
@@ -494,8 +574,11 @@ describe('Configuration', () => {
         recursive: false,
         dryRun: true,
         useLlm: true,
+        llmProvider: 'openai',
         anthropicApiKey: 'api-key-123',
-        llmModel: 'claude-3-5-haiku-20241022',
+        openaiApiKey: 'openai-key-456',
+        ollamaHost: 'http://custom:11434',
+        llmModel: 'gpt-4o-mini',
       });
 
       const json = original.toJSON();
@@ -514,7 +597,10 @@ describe('Configuration', () => {
       expect(restored.recursive).toBe(original.recursive);
       expect(restored.dryRun).toBe(original.dryRun);
       expect(restored.useLlm).toBe(original.useLlm);
+      expect(restored.llmProvider).toBe(original.llmProvider);
       expect(restored.anthropicApiKey).toBe(original.anthropicApiKey);
+      expect(restored.openaiApiKey).toBe(original.openaiApiKey);
+      expect(restored.ollamaHost).toBe(original.ollamaHost);
       expect(restored.llmModel).toBe(original.llmModel);
     });
 
