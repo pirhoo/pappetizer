@@ -13,6 +13,7 @@ export class RenameReceiptsUseCase {
     manifestAdapter,
     userPromptAdapter,
     llmAdapter = null,
+    memoryAdapter = null,
     configuration = null,
   }) {
     this.fileSystem = fileSystemAdapter;
@@ -21,6 +22,7 @@ export class RenameReceiptsUseCase {
     this.manifest = manifestAdapter;
     this.userPrompt = userPromptAdapter;
     this.llm = llmAdapter;
+    this.memory = memoryAdapter;
     this.config = configuration || Configuration.getDefaults();
     this.dataExtractor = new ReceiptDataExtractor();
   }
@@ -86,7 +88,7 @@ export class RenameReceiptsUseCase {
         // Check if this file is the result of a previous rename (skip it)
         const isRenameResult = await this.manifest.isRenameResult(currentDir, originalName);
         if (isRenameResult) {
-          this.userPrompt.log(`Skipping (previously renamed): ${originalName}`);
+          this.userPrompt.skipped(originalName, 'previously renamed');
           stats.skipped++;
           continue;
         }
@@ -94,10 +96,21 @@ export class RenameReceiptsUseCase {
         // If a file with that name exists, it's either a new file or the renamed file was deleted.
 
         stats.processed++;
-        this.userPrompt.log(`\nProcessing: ${filePath}`);
+        this.userPrompt.log('');
+        this.userPrompt.startSpinner(`Extracting data from ${originalName}`);
 
         try {
           const receipt = await this.extractReceiptData(filePath, originalName);
+          this.userPrompt.stopSpinner();
+
+          // Apply memory (learned vendor aliases)
+          if (this.memory && receipt.vendor) {
+            const correctedVendor = this.memory.applyVendorAlias(receipt.vendor);
+            if (correctedVendor !== receipt.vendor) {
+              receipt.vendor = correctedVendor;
+            }
+          }
+
           const suggestedName = receipt.generateFilename({
             dateFormat: this.config.dateFormat,
             nameSeparator: this.config.nameSeparator,
@@ -107,7 +120,7 @@ export class RenameReceiptsUseCase {
 
           // Skip if suggested name is same as original
           if (suggestedName === originalName) {
-            this.userPrompt.log(`Name unchanged: ${originalName}`);
+            this.userPrompt.skipped(originalName, 'name unchanged');
             stats.skipped++;
             continue;
           }
@@ -137,6 +150,10 @@ export class RenameReceiptsUseCase {
               acceptAllInDir = currentDir;
               break;
             case 'editFields':
+              // Record vendor correction to memory if changed
+              if (this.memory && response.editedFields.vendor !== undefined && response.editedFields.vendor !== receipt.vendor) {
+                await this.memory.recordVendorAlias(receipt.vendor, response.editedFields.vendor);
+              }
               // Apply edited fields to create new receipt
               finalReceipt = new Receipt({
                 filePath,
@@ -191,6 +208,7 @@ export class RenameReceiptsUseCase {
             }
           }
         } catch (error) {
+          this.userPrompt.stopSpinner();
           this.userPrompt.error(`Error processing ${originalName}: ${error.message}`);
           stats.errors.push(`${originalName}: ${error.message}`);
         }
@@ -242,18 +260,29 @@ export class RenameReceiptsUseCase {
     // Check if this file is the result of a previous rename (skip it)
     const isRenameResult = await this.manifest.isRenameResult(currentDir, originalName);
     if (isRenameResult) {
-      this.userPrompt.log(`Skipping (previously renamed): ${originalName}`);
+      this.userPrompt.skipped(originalName, 'previously renamed');
       result.skipped = true;
       return result;
     }
 
     result.processed = true;
-    this.userPrompt.log(`\nProcessing: ${filePath}`);
+    this.userPrompt.log('');
+    this.userPrompt.startSpinner(`Extracting data from ${originalName}`);
 
     try {
       await this.ocr.initialize();
 
       const receipt = await this.extractReceiptData(filePath, originalName);
+      this.userPrompt.stopSpinner();
+
+      // Apply memory (learned vendor aliases)
+      if (this.memory && receipt.vendor) {
+        const correctedVendor = this.memory.applyVendorAlias(receipt.vendor);
+        if (correctedVendor !== receipt.vendor) {
+          receipt.vendor = correctedVendor;
+        }
+      }
+
       const suggestedName = receipt.generateFilename({
         dateFormat: this.config.dateFormat,
         nameSeparator: this.config.nameSeparator,
@@ -263,7 +292,7 @@ export class RenameReceiptsUseCase {
 
       // Skip if suggested name is same as original
       if (suggestedName === originalName) {
-        this.userPrompt.log(`Name unchanged: ${originalName}`);
+        this.userPrompt.skipped(originalName, 'name unchanged');
         result.skipped = true;
         return result;
       }
@@ -289,6 +318,10 @@ export class RenameReceiptsUseCase {
           shouldRename = true;
           break;
         case 'editFields':
+          // Record vendor correction to memory if changed
+          if (this.memory && response.editedFields.vendor !== undefined && response.editedFields.vendor !== receipt.vendor) {
+            await this.memory.recordVendorAlias(receipt.vendor, response.editedFields.vendor);
+          }
           finalReceipt = new Receipt({
             filePath,
             originalName,
@@ -341,6 +374,7 @@ export class RenameReceiptsUseCase {
         }
       }
     } catch (error) {
+      this.userPrompt.stopSpinner();
       this.userPrompt.error(`Error processing ${originalName}: ${error.message}`);
       result.error = `${originalName}: ${error.message}`;
     } finally {
@@ -400,7 +434,9 @@ export class RenameReceiptsUseCase {
     let extracted;
     if (this.llm && this.llm.isAvailable()) {
       try {
-        extracted = await this.llm.extractReceiptData(text);
+        // Pass vendor aliases to LLM for context
+        const vendorAliases = this.memory ? this.memory.getVendorAliases() : {};
+        extracted = await this.llm.extractReceiptData(text, vendorAliases);
         // If LLM returns incomplete data, fill in gaps with heuristic extraction
         const heuristicExtracted = this.dataExtractor.extract(text);
         extracted = {
