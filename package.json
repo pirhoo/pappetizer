@@ -1,0 +1,46 @@
+{
+  "name": "pappetizer",
+  "version": "1.0.0",
+  "description": "CLI tool to rename receipt files by extracting vendor, date, amount from PDFs and images",
+  "main": "src/index.js",
+  "bin": {
+    "pappetizer": "./src/index.js"
+  },
+  "type": "module",
+  "scripts": {
+    "start": "node src/index.js",
+    "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js",
+    "test:watch": "node --experimental-vm-modules node_modules/jest/bin/jest.js --watch",
+    "test:coverage": "node --experimental-vm-modules node_modules/jest/bin/jest.js --coverage",
+    "lint": "eslint src/",
+    "lint:fix": "eslint src/ --fix"
+  },
+  "keywords": [
+    "receipt",
+    "ocr",
+    "rename",
+    "pdf",
+    "tesseract",
+    "cli"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.71.2",
+    "commander": "^12.1.0",
+    "inquirer": "^9.2.23",
+    "pdf-parse": "^1.1.1",
+    "pdf-to-img": "^5.0.0",
+    "sharp": "^0.33.5",
+    "tesseract.js": "^5.1.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.15.0",
+    "eslint": "^9.15.0",
+    "globals": "^15.12.0",
+    "jest": "^29.7.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
