@@ -154,4 +154,32 @@ export class ManifestAdapter extends ManifestPort {
   clearCache() {
     this.cache.clear();
   }
+
+  /**
+   * Remove a rename entry from the manifest
+   * @param {string} dirPath - Directory path
+   * @param {string} originalName - Original filename (key)
+   * @returns {Promise<boolean>} - True if entry was removed
+   */
+  async removeEntry(dirPath, originalName) {
+    const entries = await this.load(dirPath);
+
+    if (!entries.has(originalName)) {
+      return false;
+    }
+
+    entries.delete(originalName);
+    await this.save(dirPath, entries);
+    return true;
+  }
+
+  /**
+   * Get all rename entries for a directory
+   * @param {string} dirPath - Directory path
+   * @returns {Promise<Array<object>>} - Array of rename entries
+   */
+  async getAllEntries(dirPath) {
+    const entries = await this.load(dirPath);
+    return Array.from(entries.values());
+  }
 }
