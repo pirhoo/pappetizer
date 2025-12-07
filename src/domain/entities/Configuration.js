@@ -39,6 +39,9 @@ export class Configuration {
     useLlm = false,
     anthropicApiKey = null,
     llmModel = 'claude-3-haiku-20240307',
+
+    // Minimum confidence score (0-1) required for auto-rename with --yes flag
+    minConfidence = 0.7,
   } = {}) {
     this.dateFormat = dateFormat;
     this.nameSeparator = nameSeparator;
@@ -55,6 +58,7 @@ export class Configuration {
     this.useLlm = useLlm;
     this.anthropicApiKey = anthropicApiKey;
     this.llmModel = llmModel;
+    this.minConfidence = minConfidence;
   }
 
   /**
@@ -115,6 +119,11 @@ export class Configuration {
       errors.push(`Invalid LLM model: ${this.llmModel}. Valid models: ${validLlmModels.join(', ')}`);
     }
 
+    // Validate minConfidence
+    if (typeof this.minConfidence !== 'number' || this.minConfidence < 0 || this.minConfidence > 1) {
+      errors.push(`Invalid minimum confidence: ${this.minConfidence}. Must be a number between 0 and 1.`);
+    }
+
     return {
       valid: errors.length === 0,
       errors,
@@ -149,6 +158,7 @@ export class Configuration {
       useLlm: this.useLlm,
       anthropicApiKey: this.anthropicApiKey,
       llmModel: this.llmModel,
+      minConfidence: this.minConfidence,
     };
   }
 
