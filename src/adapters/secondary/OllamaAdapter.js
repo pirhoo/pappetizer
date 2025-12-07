@@ -120,9 +120,14 @@ Important rules:
         throw new Error(data.error);
       }
 
-      // Ollama chat API returns { message: { content: "..." }, done: true }
+      // Ollama chat API returns { message: { role: "assistant", content: "..." }, done: true }
       // Ollama generate API returns { response: "..." }
-      const content = data.message?.content || data.response;
+      let content = data.response;
+
+      if (data.message) {
+        // message can be { role, content } or just a string in some versions
+        content = typeof data.message === 'string' ? data.message : data.message.content;
+      }
 
       if (!content) {
         // Check if the response indicates it's still processing
@@ -130,8 +135,10 @@ Important rules:
           throw new Error('Ollama returned incomplete response');
         }
         // Provide more context about what we received
-        const keys = Object.keys(data).join(', ');
-        throw new Error(`Unexpected response format from Ollama. Got keys: ${keys}`);
+        const messageInfo = data.message
+          ? `message keys: ${Object.keys(data.message).join(', ')}`
+          : 'no message';
+        throw new Error(`Ollama returned empty content. ${messageInfo}`);
       }
 
       return this.parseResponse(content);
