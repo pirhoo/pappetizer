@@ -32,8 +32,8 @@ export class Configuration {
     // Directories to skip
     skipDirectories = ['node_modules', '.git', '__pycache__', '.DS_Store'],
 
-    // Whether to process subdirectories
-    recursive = true,
+    // Whether to process subdirectories (default: false for safety)
+    recursive = false,
 
     // Dry run by default (safety)
     dryRun = false,

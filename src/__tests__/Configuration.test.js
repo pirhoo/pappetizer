@@ -16,7 +16,7 @@ describe('Configuration', () => {
       expect(config.minFileSize).toBe(1024);
       expect(config.vendorAliases).toEqual({});
       expect(config.skipDirectories).toEqual(['node_modules', '.git', '__pycache__', '.DS_Store']);
-      expect(config.recursive).toBe(true);
+      expect(config.recursive).toBe(false);
       expect(config.dryRun).toBe(false);
       expect(config.useLlm).toBe(false);
       expect(config.anthropicApiKey).toBeNull();
@@ -419,7 +419,7 @@ describe('Configuration', () => {
         minFileSize: 1024,
         vendorAliases: {},
         skipDirectories: ['node_modules', '.git', '__pycache__', '.DS_Store'],
-        recursive: true,
+        recursive: false,
         dryRun: false,
         useLlm: true,
         anthropicApiKey: 'secret-key',
