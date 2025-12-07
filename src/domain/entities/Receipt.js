@@ -2,13 +2,52 @@
  * Receipt entity representing extracted receipt data
  */
 export class Receipt {
-  constructor({ filePath, vendor, date, amount, currency, originalName }) {
+  constructor({ filePath, vendor, date, amount, currency, originalName, confidence = null }) {
     this.filePath = filePath;
     this.vendor = vendor;
     this.date = date;
     this.amount = amount;
     this.currency = currency;
     this.originalName = originalName;
+    this.confidence = confidence;
+  }
+
+  /**
+   * Calculate confidence score based on extracted fields
+   * @param {object} options - Options for confidence calculation
+   * @param {boolean} options.usedLlm - Whether LLM was used for extraction
+   * @returns {number} Confidence score between 0 and 1
+   */
+  calculateConfidence({ usedLlm = false } = {}) {
+    let score = 0;
+
+    // Vendor: 0.3 points (high priority)
+    if (this.vendor && this.vendor.trim() !== '' && this.vendor !== 'UNKNOWN') {
+      score += 0.3;
+    }
+
+    // Date: 0.3 points (high priority)
+    if (this.date && !isNaN(new Date(this.date).getTime())) {
+      score += 0.3;
+    }
+
+    // Amount: 0.2 points (medium priority)
+    if (this.amount !== null && this.amount !== undefined && this.amount > 0) {
+      score += 0.2;
+    }
+
+    // Currency: 0.1 points (low priority)
+    if (this.currency && this.currency.trim() !== '') {
+      score += 0.1;
+    }
+
+    // LLM bonus: 0.1 points (when LLM was used, data is typically more reliable)
+    if (usedLlm) {
+      score += 0.1;
+    }
+
+    // Cap at 1.0
+    return Math.min(score, 1.0);
   }
 
   /**
@@ -129,6 +168,7 @@ export class Receipt {
       currency: this.currency,
       originalName: this.originalName,
       generatedName: this.generateFilename(config),
+      confidence: this.confidence,
     };
   }
 }
