@@ -121,8 +121,8 @@ program
 // Clean subcommand
 program
   .command('clean')
-  .description('Rename receipt files in a directory')
-  .argument('[directory]', 'Directory to process', '.')
+  .description('Rename receipt files in a directory or process a single file')
+  .argument('[path]', 'Directory or file to process', '.')
   .option('-v, --verbose', 'Enable verbose output')
   .option('-r, --recursive', 'Process subdirectories recursively')
   .option('-w, --watch', 'Watch directory for new files and process them automatically')
@@ -132,14 +132,24 @@ program
   .option('--use-llm', 'Enable LLM extraction (requires API key)')
   .option('--no-llm', 'Disable LLM extraction even if configured')
   .option('--model <model>', 'LLM model to use (e.g., claude-3-haiku-20240307)')
-  .action(async (directory, options) => {
-    const dirPath = path.resolve(directory);
+  .action(async (targetPath, options) => {
+    const resolvedPath = path.resolve(targetPath);
     const userPrompt = new UserPromptAdapter();
 
     printHeader();
 
-    // Show directory
-    console.log(`  ${c.dim}Directory${c.reset}  ${dirPath}`);
+    // Check if path is a file or directory
+    let isFile = false;
+    try {
+      const stat = fs.statSync(resolvedPath);
+      isFile = stat.isFile();
+    } catch {
+      userPrompt.error(`Path not found: ${resolvedPath}`);
+      process.exit(1);
+    }
+
+    // Show path
+    console.log(`  ${c.dim}${isFile ? 'File' : 'Directory'}${c.reset}  ${resolvedPath}`);
     console.log('');
 
     // Load configuration
@@ -200,99 +210,115 @@ program
     };
 
     try {
-      // Initial run
       const useCase = createUseCase();
-      const stats = await useCase.execute(dirPath, executeOptions);
-      printStats(stats, { verbose: options.verbose });
 
-      // Watch mode
-      if (options.watch) {
-        console.log(`  ${c.cyan}${symbols.info}${c.reset} Watching for new files...`);
-        console.log(`  ${c.dim}Press Ctrl+C to stop${c.reset}`);
-        console.log('');
+      if (isFile) {
+        // Process single file
+        if (options.watch) {
+          userPrompt.warn('Watch mode is not available for single files.');
+        }
+        const result = await useCase.processFile(resolvedPath, executeOptions);
+        const stats = {
+          processed: result.processed ? 1 : 0,
+          renamed: result.renamed ? 1 : 0,
+          skipped: result.skipped ? 1 : 0,
+          errors: result.error ? [result.error] : [],
+        };
+        printStats(stats, { verbose: options.verbose });
+      } else {
+        // Process directory
+        const stats = await useCase.execute(resolvedPath, executeOptions);
+        printStats(stats, { verbose: options.verbose });
 
-        const watchOptions = { recursive: options.recursive };
-        let debounceTimers = new Map();
-        let isProcessing = false;
-        const pendingFiles = new Set();
-
-        const processNextFile = async () => {
-          if (isProcessing || pendingFiles.size === 0) return;
-
-          isProcessing = true;
-
-          while (pendingFiles.size > 0) {
-            const filePath = pendingFiles.values().next().value;
-            pendingFiles.delete(filePath);
-
-            // Check if file still exists (might have been moved/deleted)
-            if (!fs.existsSync(filePath)) continue;
-
-            console.log(`  ${timestamp()} ${c.cyan}${symbols.arrowRight}${c.reset} ${path.basename(filePath)}`);
-
-            // Clear manifest cache to pick up any changes
-            manifestAdapter.clearCache();
-
-            const watchUseCase = createUseCase();
-            const result = await watchUseCase.processFile(filePath, executeOptions);
-
-            if (result.error) {
-              userPrompt.error(result.error);
-            }
-          }
-
-          isProcessing = false;
-          console.log('');
+        // Watch mode (only for directories)
+        if (options.watch) {
           console.log(`  ${c.cyan}${symbols.info}${c.reset} Watching for new files...`);
+          console.log(`  ${c.dim}Press Ctrl+C to stop${c.reset}`);
           console.log('');
-        };
 
-        const watcher = fs.watch(dirPath, watchOptions, (eventType, filename) => {
-          if (!filename || filename.startsWith('.')) return;
+          const watchOptions = { recursive: options.recursive };
+          let debounceTimers = new Map();
+          let isProcessing = false;
+          const pendingFiles = new Set();
 
-          const ext = path.extname(filename).toLowerCase();
-          if (!configuration.supportedExtensions.includes(ext)) return;
+          const processNextFile = async () => {
+            if (isProcessing || pendingFiles.size === 0) return;
 
-          const filePath = path.join(dirPath, filename);
+            isProcessing = true;
 
-          // Clear any existing debounce timer for this file
-          if (debounceTimers.has(filePath)) {
-            clearTimeout(debounceTimers.get(filePath));
-          }
+            while (pendingFiles.size > 0) {
+              const filePath = pendingFiles.values().next().value;
+              pendingFiles.delete(filePath);
 
-          // Debounce to handle multiple events for same file (file being written)
-          const timer = setTimeout(async () => {
-            debounceTimers.delete(filePath);
-            pendingFiles.add(filePath);
+              // Check if file still exists (might have been moved/deleted)
+              if (!fs.existsSync(filePath)) continue;
 
-            try {
-              await processNextFile();
-            } catch (error) {
-              userPrompt.error(`Watch error: ${error.message}`);
+              console.log(`  ${timestamp()} ${c.cyan}${symbols.arrowRight}${c.reset} ${path.basename(filePath)}`);
+
+              // Clear manifest cache to pick up any changes
+              manifestAdapter.clearCache();
+
+              const watchUseCase = createUseCase();
+              const result = await watchUseCase.processFile(filePath, executeOptions);
+
+              if (result.error) {
+                userPrompt.error(result.error);
+              }
             }
-          }, 1000); // Wait 1 second for file to be fully written
 
-          debounceTimers.set(filePath, timer);
-        });
+            isProcessing = false;
+            console.log('');
+            console.log(`  ${c.cyan}${symbols.info}${c.reset} Watching for new files...`);
+            console.log('');
+          };
 
-        // Handle graceful shutdown
-        const cleanup = () => {
-          console.log('');
-          console.log(`  ${c.dim}Stopping watcher...${c.reset}`);
-          watcher.close();
-          for (const timer of debounceTimers.values()) {
-            clearTimeout(timer);
-          }
-          console.log(`  ${c.green}${symbols.success}${c.reset} Done`);
-          console.log('');
-          process.exit(0);
-        };
+          const watcher = fs.watch(resolvedPath, watchOptions, (eventType, filename) => {
+            if (!filename || filename.startsWith('.')) return;
 
-        process.on('SIGINT', cleanup);
-        process.on('SIGTERM', cleanup);
+            const ext = path.extname(filename).toLowerCase();
+            if (!configuration.supportedExtensions.includes(ext)) return;
 
-        // Keep process running
-        await new Promise(() => {});
+            const filePath = path.join(resolvedPath, filename);
+
+            // Clear any existing debounce timer for this file
+            if (debounceTimers.has(filePath)) {
+              clearTimeout(debounceTimers.get(filePath));
+            }
+
+            // Debounce to handle multiple events for same file (file being written)
+            const timer = setTimeout(async () => {
+              debounceTimers.delete(filePath);
+              pendingFiles.add(filePath);
+
+              try {
+                await processNextFile();
+              } catch (error) {
+                userPrompt.error(`Watch error: ${error.message}`);
+              }
+            }, 1000); // Wait 1 second for file to be fully written
+
+            debounceTimers.set(filePath, timer);
+          });
+
+          // Handle graceful shutdown
+          const cleanup = () => {
+            console.log('');
+            console.log(`  ${c.dim}Stopping watcher...${c.reset}`);
+            watcher.close();
+            for (const timer of debounceTimers.values()) {
+              clearTimeout(timer);
+            }
+            console.log(`  ${c.green}${symbols.success}${c.reset} Done`);
+            console.log('');
+            process.exit(0);
+          };
+
+          process.on('SIGINT', cleanup);
+          process.on('SIGTERM', cleanup);
+
+          // Keep process running
+          await new Promise(() => {});
+        }
       }
     } catch (error) {
       userPrompt.error(`Fatal error: ${error.message}`);
@@ -318,6 +344,7 @@ program.addHelpText('afterAll', () => {
   console.log('');
   console.log(`  ${c.dim}Examples:${c.reset}`);
   console.log(`    $ ${APP_NAME} clean ./receipts`);
+  console.log(`    $ ${APP_NAME} clean ./receipt.pdf`);
   console.log(`    $ ${APP_NAME} clean ./receipts --dry-run`);
   console.log(`    $ ${APP_NAME} clean ./receipts -r -y`);
   console.log(`    $ ${APP_NAME} clean ./receipts --watch`);
