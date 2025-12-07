@@ -14,12 +14,6 @@ export class ConfigureUseCase {
    * @returns {Promise<Configuration>}
    */
   async execute() {
-    this.prompt.log('');
-    this.prompt.log('='.repeat(60));
-    this.prompt.log('  Pappetizer Configuration Wizard');
-    this.prompt.log('='.repeat(60));
-    this.prompt.log('');
-
     // Load existing config or defaults
     const existingConfig = await this.config.loadOrDefault();
     const configExists = await this.config.exists();
