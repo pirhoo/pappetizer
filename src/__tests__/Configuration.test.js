@@ -418,6 +418,7 @@ describe('Configuration', () => {
         useLlm: true,
         anthropicApiKey: 'secret-key',
         llmModel: 'claude-3-haiku-20240307',
+        minConfidence: 0.7,
       });
     });
 
@@ -441,6 +442,7 @@ describe('Configuration', () => {
         'useLlm',
         'anthropicApiKey',
         'llmModel',
+        'minConfidence',
       ]);
     });
 
