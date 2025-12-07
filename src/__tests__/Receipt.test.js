@@ -848,4 +848,216 @@ describe('Receipt', () => {
       expect(() => new Receipt()).toThrow();
     });
   });
+
+  describe('calculateConfidence', () => {
+    it('should return 1.0 for complete receipt with LLM', () => {
+      const receipt = new Receipt({
+        vendor: 'Amazon',
+        date: new Date('2024-03-15'),
+        amount: 42.99,
+        currency: 'USD',
+        originalName: 'receipt.pdf',
+      });
+
+      const confidence = receipt.calculateConfidence({ usedLlm: true });
+      expect(confidence).toBe(1.0);
+    });
+
+    it('should return 0.9 for complete receipt without LLM', () => {
+      const receipt = new Receipt({
+        vendor: 'Amazon',
+        date: new Date('2024-03-15'),
+        amount: 42.99,
+        currency: 'USD',
+        originalName: 'receipt.pdf',
+      });
+
+      const confidence = receipt.calculateConfidence({ usedLlm: false });
+      expect(confidence).toBe(0.9);
+    });
+
+    it('should return 0 for empty receipt', () => {
+      const receipt = new Receipt({
+        originalName: 'receipt.pdf',
+      });
+
+      const confidence = receipt.calculateConfidence();
+      expect(confidence).toBe(0);
+    });
+
+    it('should add 0.3 for vendor', () => {
+      const receipt = new Receipt({
+        vendor: 'Amazon',
+        originalName: 'receipt.pdf',
+      });
+
+      const confidence = receipt.calculateConfidence();
+      expect(confidence).toBe(0.3);
+    });
+
+    it('should add 0.3 for date', () => {
+      const receipt = new Receipt({
+        date: new Date('2024-03-15'),
+        originalName: 'receipt.pdf',
+      });
+
+      const confidence = receipt.calculateConfidence();
+      expect(confidence).toBe(0.3);
+    });
+
+    it('should add 0.2 for amount', () => {
+      const receipt = new Receipt({
+        amount: 42.99,
+        originalName: 'receipt.pdf',
+      });
+
+      const confidence = receipt.calculateConfidence();
+      expect(confidence).toBe(0.2);
+    });
+
+    it('should add 0.1 for currency', () => {
+      const receipt = new Receipt({
+        currency: 'USD',
+        originalName: 'receipt.pdf',
+      });
+
+      const confidence = receipt.calculateConfidence();
+      expect(confidence).toBe(0.1);
+    });
+
+    it('should add 0.1 for LLM usage', () => {
+      const receipt = new Receipt({
+        originalName: 'receipt.pdf',
+      });
+
+      const confidence = receipt.calculateConfidence({ usedLlm: true });
+      expect(confidence).toBe(0.1);
+    });
+
+    it('should not count UNKNOWN vendor', () => {
+      const receipt = new Receipt({
+        vendor: 'UNKNOWN',
+        originalName: 'receipt.pdf',
+      });
+
+      const confidence = receipt.calculateConfidence();
+      expect(confidence).toBe(0);
+    });
+
+    it('should not count empty vendor', () => {
+      const receipt = new Receipt({
+        vendor: '  ',
+        originalName: 'receipt.pdf',
+      });
+
+      const confidence = receipt.calculateConfidence();
+      expect(confidence).toBe(0);
+    });
+
+    it('should not count invalid date', () => {
+      const receipt = new Receipt({
+        date: new Date('invalid'),
+        originalName: 'receipt.pdf',
+      });
+
+      const confidence = receipt.calculateConfidence();
+      expect(confidence).toBe(0);
+    });
+
+    it('should not count zero amount', () => {
+      const receipt = new Receipt({
+        amount: 0,
+        originalName: 'receipt.pdf',
+      });
+
+      const confidence = receipt.calculateConfidence();
+      expect(confidence).toBe(0);
+    });
+
+    it('should not count negative amount', () => {
+      const receipt = new Receipt({
+        amount: -10,
+        originalName: 'receipt.pdf',
+      });
+
+      const confidence = receipt.calculateConfidence();
+      expect(confidence).toBe(0);
+    });
+
+    it('should calculate correctly for vendor and date only', () => {
+      const receipt = new Receipt({
+        vendor: 'Amazon',
+        date: new Date('2024-03-15'),
+        originalName: 'receipt.pdf',
+      });
+
+      const confidence = receipt.calculateConfidence();
+      expect(confidence).toBe(0.6);
+    });
+
+    it('should calculate correctly for all fields except currency', () => {
+      const receipt = new Receipt({
+        vendor: 'Amazon',
+        date: new Date('2024-03-15'),
+        amount: 42.99,
+        originalName: 'receipt.pdf',
+      });
+
+      const confidence = receipt.calculateConfidence();
+      expect(confidence).toBe(0.8);
+    });
+
+    it('should cap at 1.0', () => {
+      const receipt = new Receipt({
+        vendor: 'Amazon',
+        date: new Date('2024-03-15'),
+        amount: 42.99,
+        currency: 'USD',
+        originalName: 'receipt.pdf',
+      });
+
+      // Even with usedLlm: true, should not exceed 1.0
+      const confidence = receipt.calculateConfidence({ usedLlm: true });
+      expect(confidence).toBe(1.0);
+    });
+
+    it('should use stored confidence when available', () => {
+      const receipt = new Receipt({
+        vendor: 'Amazon',
+        date: new Date('2024-03-15'),
+        amount: 42.99,
+        currency: 'USD',
+        originalName: 'receipt.pdf',
+        confidence: 0.75,
+      });
+
+      expect(receipt.confidence).toBe(0.75);
+    });
+  });
+
+  describe('toJSON with confidence', () => {
+    it('should include confidence in JSON output', () => {
+      const receipt = new Receipt({
+        vendor: 'Amazon',
+        date: new Date('2024-03-15'),
+        amount: 42.99,
+        currency: 'USD',
+        originalName: 'receipt.pdf',
+        confidence: 0.9,
+      });
+
+      const json = receipt.toJSON();
+      expect(json.confidence).toBe(0.9);
+    });
+
+    it('should include null confidence in JSON output', () => {
+      const receipt = new Receipt({
+        vendor: 'Amazon',
+        originalName: 'receipt.pdf',
+      });
+
+      const json = receipt.toJSON();
+      expect(json.confidence).toBeNull();
+    });
+  });
 });
