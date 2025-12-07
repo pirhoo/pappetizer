@@ -132,6 +132,7 @@ program
   .option('--use-llm', 'Enable LLM extraction (requires API key)')
   .option('--no-llm', 'Disable LLM extraction even if configured')
   .option('--model <model>', 'LLM model to use (e.g., claude-3-haiku-20240307)')
+  .option('--min-confidence <value>', 'Minimum confidence (0-1) for auto-rename with --yes (default: 0.7)', parseFloat)
   .action(async (targetPath, options) => {
     const resolvedPath = path.resolve(targetPath);
     const userPrompt = new UserPromptAdapter();
@@ -207,6 +208,7 @@ program
       dryRun: options.dryRun,
       yes: options.yes,
       recursive: options.recursive,
+      minConfidence: options.minConfidence,
     };
 
     try {
