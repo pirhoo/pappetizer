@@ -203,6 +203,154 @@ export class RenameReceiptsUseCase {
   }
 
   /**
+   * Process a single file
+   * @param {string} filePath - Full path to the file
+   * @param {object} options - Processing options
+   * @returns {Promise<{ processed: boolean, renamed: boolean, skipped: boolean, error: string|null }>}
+   */
+  async processFile(filePath, options = {}) {
+    const result = { processed: false, renamed: false, skipped: false, error: null };
+
+    const dryRun = options.dryRun ?? this.config.dryRun;
+    const autoAccept = options.yes ?? this.config.autoAcceptAll;
+    const supportedExtensions = this.config.supportedExtensions;
+
+    const ext = this.fileSystem.getExtension(filePath);
+
+    if (!supportedExtensions.includes(ext)) {
+      result.skipped = true;
+      return result;
+    }
+
+    // Check file size
+    try {
+      const fileStats = await this.fileSystem.getStats(filePath);
+      if (fileStats && fileStats.size < this.config.minFileSize) {
+        result.skipped = true;
+        return result;
+      }
+    } catch {
+      // Continue if we can't get stats
+    }
+
+    const currentDir = this.fileSystem.getDirname(filePath);
+    const originalName = this.fileSystem.getBasename(filePath);
+
+    // Initialize manifest for this directory
+    await this.manifest.initialize(currentDir);
+
+    // Check if this file is the result of a previous rename (skip it)
+    const isRenameResult = await this.manifest.isRenameResult(currentDir, originalName);
+    if (isRenameResult) {
+      this.userPrompt.log(`Skipping (previously renamed): ${originalName}`);
+      result.skipped = true;
+      return result;
+    }
+
+    result.processed = true;
+    this.userPrompt.log(`\nProcessing: ${filePath}`);
+
+    try {
+      await this.ocr.initialize();
+
+      const receipt = await this.extractReceiptData(filePath, originalName);
+      const suggestedName = receipt.generateFilename({
+        dateFormat: this.config.dateFormat,
+        nameSeparator: this.config.nameSeparator,
+        nameTemplate: this.config.nameTemplate,
+        defaultCurrency: this.config.defaultCurrency,
+      });
+
+      // Skip if suggested name is same as original
+      if (suggestedName === originalName) {
+        this.userPrompt.log(`Name unchanged: ${originalName}`);
+        result.skipped = true;
+        return result;
+      }
+
+      let finalName = suggestedName;
+      let shouldRename = false;
+      let finalReceipt = receipt;
+
+      if (autoAccept) {
+        shouldRename = true;
+      } else {
+        const extractedData = {
+          vendor: receipt.vendor,
+          date: receipt.date,
+          amount: receipt.amount,
+          currency: receipt.currency,
+        };
+        const response = await this.userPrompt.promptForRename(originalName, suggestedName, extractedData);
+
+        switch (response.action) {
+        case 'accept':
+        case 'acceptAll':
+          shouldRename = true;
+          break;
+        case 'editFields':
+          finalReceipt = new Receipt({
+            filePath,
+            originalName,
+            vendor: response.editedFields.vendor !== undefined ? response.editedFields.vendor : receipt.vendor,
+            date: response.editedFields.date !== undefined ? response.editedFields.date : receipt.date,
+            amount: response.editedFields.amount !== undefined ? response.editedFields.amount : receipt.amount,
+            currency: response.editedFields.currency !== undefined ? response.editedFields.currency : receipt.currency,
+          });
+          finalName = finalReceipt.generateFilename({
+            dateFormat: this.config.dateFormat,
+            nameSeparator: this.config.nameSeparator,
+            nameTemplate: this.config.nameTemplate,
+            defaultCurrency: this.config.defaultCurrency,
+          });
+          shouldRename = true;
+          break;
+        case 'manual':
+          finalName = response.customName;
+          shouldRename = true;
+          break;
+        case 'skip':
+          result.skipped = true;
+          return result;
+        }
+      }
+
+      if (shouldRename) {
+        const newPath = this.fileSystem.joinPath(currentDir, finalName);
+
+        if (await this.fileSystem.exists(newPath)) {
+          this.userPrompt.error(`Target file already exists: ${finalName}`);
+          result.error = `${originalName}: target exists`;
+          return result;
+        }
+
+        if (dryRun) {
+          this.userPrompt.success(`[DRY RUN] Would rename: ${originalName} -> ${finalName}`);
+          result.renamed = true;
+        } else {
+          await this.fileSystem.renameFile(filePath, newPath);
+          await this.manifest.addEntry(currentDir, originalName, finalName, finalReceipt.toJSON({
+            dateFormat: this.config.dateFormat,
+            nameSeparator: this.config.nameSeparator,
+            nameTemplate: this.config.nameTemplate,
+            defaultCurrency: this.config.defaultCurrency,
+          }));
+
+          this.userPrompt.success(`Renamed: ${originalName} -> ${finalName}`);
+          result.renamed = true;
+        }
+      }
+    } catch (error) {
+      this.userPrompt.error(`Error processing ${originalName}: ${error.message}`);
+      result.error = `${originalName}: ${error.message}`;
+    } finally {
+      await this.ocr.terminate();
+    }
+
+    return result;
+  }
+
+  /**
    * Extract receipt data from a file
    * @param {string} filePath - Path to the file
    * @param {string} originalName - Original filename
