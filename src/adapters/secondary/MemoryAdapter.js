@@ -1,18 +1,82 @@
+import fs from 'fs/promises';
+import path from 'path';
+import os from 'os';
 import { MemoryPort } from '../../domain/ports/MemoryPort.js';
+
+const APP_NAME = 'pappetizer';
+const MEMORY_FILENAME = 'memory.json';
+
+/**
+ * Get the XDG state directory
+ * @returns {string}
+ */
+function getXdgStateHome() {
+  return process.env.XDG_STATE_HOME || path.join(os.homedir(), '.local', 'state');
+}
 
 /**
  * Memory adapter for learning from user corrections
- * Stores vendor aliases in the global configuration
+ * Stores vendor aliases in XDG_STATE_HOME/pappetizer/memory.json
  */
 export class MemoryAdapter extends MemoryPort {
   /**
-   * @param {ConfigurationAdapter} configAdapter - Configuration adapter for persistence
-   * @param {Configuration} configuration - Current configuration instance
+   * @param {string} stateDir - Optional custom state directory for testing
    */
-  constructor(configAdapter, configuration) {
+  constructor(stateDir = null) {
     super();
-    this.configAdapter = configAdapter;
-    this.configuration = configuration;
+    this.stateDir = stateDir || path.join(getXdgStateHome(), APP_NAME);
+    this.vendorAliases = {};
+    this.loaded = false;
+  }
+
+  /**
+   * Get the full path to the memory file
+   */
+  getMemoryPath() {
+    return path.join(this.stateDir, MEMORY_FILENAME);
+  }
+
+  /**
+   * Ensure the state directory exists
+   */
+  async ensureStateDir() {
+    await fs.mkdir(this.stateDir, { recursive: true });
+  }
+
+  /**
+   * Load memory from file
+   */
+  async load() {
+    if (this.loaded) return;
+
+    try {
+      const content = await fs.readFile(this.getMemoryPath(), 'utf-8');
+      const data = JSON.parse(content);
+      this.vendorAliases = data.vendorAliases || {};
+    } catch (error) {
+      if (error.code !== 'ENOENT') {
+        console.error(`Error loading memory: ${error.message}`);
+      }
+      // File doesn't exist or is invalid - start with empty memory
+      this.vendorAliases = {};
+    }
+    this.loaded = true;
+  }
+
+  /**
+   * Save memory to file
+   */
+  async save() {
+    await this.ensureStateDir();
+
+    const data = {
+      version: '1.0',
+      lastUpdated: new Date().toISOString(),
+      vendorAliases: this.vendorAliases,
+    };
+
+    const content = JSON.stringify(data, null, 2);
+    await fs.writeFile(this.getMemoryPath(), content, 'utf-8');
   }
 
   /**
@@ -24,15 +88,17 @@ export class MemoryAdapter extends MemoryPort {
     if (!extracted || !corrected) return;
     if (extracted === corrected) return;
 
+    await this.load();
+
     // Normalize key to lowercase for case-insensitive matching
     const key = extracted.toLowerCase().trim();
     const value = corrected.trim();
 
-    // Update in-memory configuration
-    this.configuration.vendorAliases[key] = value;
+    // Update in-memory
+    this.vendorAliases[key] = value;
 
     // Persist to file
-    await this.configAdapter.save(this.configuration);
+    await this.save();
   }
 
   /**
@@ -44,7 +110,7 @@ export class MemoryAdapter extends MemoryPort {
     if (!vendor) return vendor;
 
     const key = vendor.toLowerCase().trim();
-    return this.configuration.vendorAliases[key] || vendor;
+    return this.vendorAliases[key] || vendor;
   }
 
   /**
@@ -52,7 +118,7 @@ export class MemoryAdapter extends MemoryPort {
    * @returns {object} - Map of extracted names to corrected names
    */
   getVendorAliases() {
-    return { ...this.configuration.vendorAliases };
+    return { ...this.vendorAliases };
   }
 
   /**
@@ -60,6 +126,13 @@ export class MemoryAdapter extends MemoryPort {
    * @returns {boolean}
    */
   hasAliases() {
-    return Object.keys(this.configuration.vendorAliases).length > 0;
+    return Object.keys(this.vendorAliases).length > 0;
+  }
+
+  /**
+   * Initialize by loading memory from file
+   */
+  async initialize() {
+    await this.load();
   }
 }
