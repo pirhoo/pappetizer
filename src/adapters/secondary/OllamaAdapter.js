@@ -97,6 +97,7 @@ Important rules:
             { role: 'user', content: userPrompt },
           ],
           stream: false,
+          format: 'json',
           options: {
             temperature: 0,
             num_predict: 256,
@@ -113,10 +114,24 @@ Important rules:
       }
 
       const data = await response.json();
-      const content = data.message?.content;
+
+      // Check for error in response
+      if (data.error) {
+        throw new Error(data.error);
+      }
+
+      // Ollama chat API returns { message: { content: "..." }, done: true }
+      // Ollama generate API returns { response: "..." }
+      const content = data.message?.content || data.response;
 
       if (!content) {
-        throw new Error('Unexpected response format from Ollama');
+        // Check if the response indicates it's still processing
+        if (data.done === false) {
+          throw new Error('Ollama returned incomplete response');
+        }
+        // Provide more context about what we received
+        const keys = Object.keys(data).join(', ');
+        throw new Error(`Unexpected response format from Ollama. Got keys: ${keys}`);
       }
 
       return this.parseResponse(content);
@@ -124,7 +139,7 @@ Important rules:
       if (error.cause?.code === 'ECONNREFUSED') {
         throw new Error(`Cannot connect to Ollama at ${this.host}. Is it running?`);
       }
-      if (error.message.includes('Model') || error.message.includes('Cannot connect')) {
+      if (error.message.includes('Model') || error.message.includes('Cannot connect') || error.message.includes('Unexpected response')) {
         throw error;
       }
       throw new Error(`Ollama API error: ${error.message}`);
