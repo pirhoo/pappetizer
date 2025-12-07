@@ -82,10 +82,18 @@ export class RenameReceiptsUseCase {
           acceptAllInDir = null;
         }
 
-        // Check if already processed
+        // Check if already processed (original name was renamed before)
         const alreadyRenamed = await this.manifest.hasBeenRenamed(currentDir, originalName);
         if (alreadyRenamed) {
           this.userPrompt.log(`Skipping (already processed): ${originalName}`);
+          stats.skipped++;
+          continue;
+        }
+
+        // Check if this file is the result of a previous rename
+        const isRenameResult = await this.manifest.isRenameResult(currentDir, originalName);
+        if (isRenameResult) {
+          this.userPrompt.log(`Skipping (previously renamed): ${originalName}`);
           stats.skipped++;
           continue;
         }
