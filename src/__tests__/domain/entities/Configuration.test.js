@@ -1,4 +1,4 @@
-import { Configuration } from '../domain/entities/Configuration.js';
+import { Configuration } from '../../../domain/entities/Configuration.js';
 
 describe('Configuration', () => {
   describe('constructor', () => {

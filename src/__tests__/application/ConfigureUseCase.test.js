@@ -1,6 +1,6 @@
 import { jest } from '@jest/globals';
-import { ConfigureUseCase } from '../application/ConfigureUseCase.js';
-import { Configuration } from '../domain/entities/Configuration.js';
+import { ConfigureUseCase } from '../../application/ConfigureUseCase.js';
+import { Configuration } from '../../domain/entities/Configuration.js';
 
 describe('ConfigureUseCase', () => {
   let useCase;

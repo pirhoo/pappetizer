@@ -1,7 +1,7 @@
 import fs from 'fs/promises';
 import path from 'path';
 import os from 'os';
-import { ManifestAdapter } from '../adapters/secondary/ManifestAdapter.js';
+import { ManifestAdapter } from '../../../adapters/secondary/ManifestAdapter.js';
 
 describe('ManifestAdapter', () => {
   let adapter;

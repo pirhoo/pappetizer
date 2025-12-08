@@ -1,8 +1,8 @@
-import { LlmAdapterFactory } from '../adapters/secondary/LlmAdapterFactory.js';
-import { AnthropicAdapter } from '../adapters/secondary/LlmAdapter.js';
-import { OpenAiAdapter } from '../adapters/secondary/OpenAiAdapter.js';
-import { OllamaAdapter } from '../adapters/secondary/OllamaAdapter.js';
-import { Configuration } from '../domain/entities/Configuration.js';
+import { LlmAdapterFactory } from '../../../adapters/secondary/LlmAdapterFactory.js';
+import { AnthropicAdapter } from '../../../adapters/secondary/LlmAdapter.js';
+import { OpenAiAdapter } from '../../../adapters/secondary/OpenAiAdapter.js';
+import { OllamaAdapter } from '../../../adapters/secondary/OllamaAdapter.js';
+import { Configuration } from '../../../domain/entities/Configuration.js';
 
 describe('LlmAdapterFactory', () => {
   describe('create', () => {

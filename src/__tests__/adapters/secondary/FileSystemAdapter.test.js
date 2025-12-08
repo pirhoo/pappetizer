@@ -1,7 +1,7 @@
 import fs from 'fs/promises';
 import path from 'path';
 import os from 'os';
-import { FileSystemAdapter } from '../adapters/secondary/FileSystemAdapter.js';
+import { FileSystemAdapter } from '../../../adapters/secondary/FileSystemAdapter.js';
 
 describe('FileSystemAdapter', () => {
   let adapter;

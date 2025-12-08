@@ -1,4 +1,4 @@
-import { Receipt } from '../domain/entities/Receipt.js';
+import { Receipt } from '../../../domain/entities/Receipt.js';
 
 describe('Receipt', () => {
   describe('generateFilename', () => {

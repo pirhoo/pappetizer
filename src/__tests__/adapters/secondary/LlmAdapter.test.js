@@ -1,4 +1,4 @@
-import { LlmAdapter } from '../adapters/secondary/LlmAdapter.js';
+import { LlmAdapter } from '../../../adapters/secondary/LlmAdapter.js';
 
 describe('LlmAdapter', () => {
   describe('constructor', () => {

@@ -1,52 +1,52 @@
-import { OpenAiAdapter } from '../adapters/secondary/OpenAiAdapter.js';
+import { OllamaAdapter } from '../../../adapters/secondary/OllamaAdapter.js';
 
-describe('OpenAiAdapter', () => {
+describe('OllamaAdapter', () => {
   describe('constructor', () => {
     it('should create adapter with default values', () => {
-      const adapter = new OpenAiAdapter();
-      expect(adapter.apiKey).toBeNull();
-      expect(adapter.model).toBe('gpt-4o-mini');
+      const adapter = new OllamaAdapter();
+      expect(adapter.host).toBe('http://localhost:11434');
+      expect(adapter.model).toBe('llama3.2');
     });
 
-    it('should create adapter with API key', () => {
-      const adapter = new OpenAiAdapter('sk-test-key');
-      expect(adapter.apiKey).toBe('sk-test-key');
+    it('should create adapter with custom host', () => {
+      const adapter = new OllamaAdapter('http://myhost:11434');
+      expect(adapter.host).toBe('http://myhost:11434');
     });
 
     it('should create adapter with custom model', () => {
-      const adapter = new OpenAiAdapter('sk-test-key', 'gpt-4o');
-      expect(adapter.model).toBe('gpt-4o');
+      const adapter = new OllamaAdapter('http://localhost:11434', 'mistral');
+      expect(adapter.model).toBe('mistral');
+    });
+
+    it('should remove trailing slash from host', () => {
+      const adapter = new OllamaAdapter('http://localhost:11434/');
+      expect(adapter.host).toBe('http://localhost:11434');
     });
   });
 
   describe('isAvailable', () => {
-    it('should return false when no API key provided', () => {
-      const adapter = new OpenAiAdapter();
-      expect(adapter.isAvailable()).toBe(false);
-    });
-
-    it('should return false when API key is null', () => {
-      const adapter = new OpenAiAdapter(null);
-      expect(adapter.isAvailable()).toBe(false);
-    });
-
-    it('should return false when API key is empty string', () => {
-      const adapter = new OpenAiAdapter('');
-      expect(adapter.isAvailable()).toBe(false);
-    });
-
-    it('should return true when API key is provided', () => {
-      const adapter = new OpenAiAdapter('sk-test-key');
+    it('should return true when host is provided', () => {
+      const adapter = new OllamaAdapter();
       expect(adapter.isAvailable()).toBe(true);
+    });
+
+    it('should return false when host is null', () => {
+      const adapter = new OllamaAdapter(null);
+      expect(adapter.isAvailable()).toBe(false);
+    });
+
+    it('should return false when host is empty string', () => {
+      const adapter = new OllamaAdapter('');
+      expect(adapter.isAvailable()).toBe(false);
     });
   });
 
   describe('extractReceiptData', () => {
-    it('should throw error when LLM is not available', async () => {
-      const adapter = new OpenAiAdapter();
+    it('should throw error when host is not configured', async () => {
+      const adapter = new OllamaAdapter('');
       await expect(adapter.extractReceiptData('test text'))
         .rejects
-        .toThrow('LLM not configured. Please provide an OpenAI API key.');
+        .toThrow('Ollama not configured. Please provide a valid host.');
     });
   });
 
@@ -54,7 +54,7 @@ describe('OpenAiAdapter', () => {
     let adapter;
 
     beforeEach(() => {
-      adapter = new OpenAiAdapter();
+      adapter = new OllamaAdapter();
     });
 
     it('should parse valid JSON response', () => {
@@ -82,6 +82,15 @@ describe('OpenAiAdapter', () => {
       expect(result.amount).toBe(5.50);
     });
 
+    it('should extract JSON from text with extra content', () => {
+      const response = 'Here is the extracted data:\n{"vendor": "Target", "date": "2024-01-15", "amount": 25.00, "currency": "USD"}\nThank you!';
+
+      const result = adapter.parseResponse(response);
+
+      expect(result.vendor).toBe('Target');
+      expect(result.amount).toBe(25.00);
+    });
+
     it('should handle null values in response', () => {
       const response = JSON.stringify({
         vendor: null,
@@ -99,7 +108,7 @@ describe('OpenAiAdapter', () => {
     });
 
     it('should handle invalid JSON by returning all nulls', () => {
-      const response = 'not valid json {{{';
+      const response = 'I could not extract any data from this receipt.';
 
       const result = adapter.parseResponse(response);
 
@@ -125,23 +134,27 @@ describe('OpenAiAdapter', () => {
   });
 
   describe('edge cases', () => {
-    it('should handle null and undefined API key values', () => {
-      const adapter1 = new OpenAiAdapter(null);
-      expect(adapter1.isAvailable()).toBe(false);
-
-      const adapter2 = new OpenAiAdapter(undefined);
-      expect(adapter2.isAvailable()).toBe(false);
-
-      const adapter3 = new OpenAiAdapter('');
-      expect(adapter3.isAvailable()).toBe(false);
-    });
-
     it('should store model correctly', () => {
-      const models = ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo', 'gpt-4', 'gpt-3.5-turbo'];
+      const models = ['llama3.2', 'mistral', 'codellama', 'phi', 'gemma'];
 
       for (const model of models) {
-        const adapter = new OpenAiAdapter('sk-test', model);
+        const adapter = new OllamaAdapter('http://localhost:11434', model);
         expect(adapter.model).toBe(model);
+      }
+    });
+
+    it('should handle various host formats', () => {
+      const hosts = [
+        'http://localhost:11434',
+        'http://192.168.1.100:11434',
+        'https://ollama.example.com',
+        'http://ollama:11434',
+      ];
+
+      for (const host of hosts) {
+        const adapter = new OllamaAdapter(host);
+        expect(adapter.host).toBe(host);
+        expect(adapter.isAvailable()).toBe(true);
       }
     });
   });

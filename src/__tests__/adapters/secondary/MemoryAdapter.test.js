@@ -1,7 +1,7 @@
 import fs from 'fs/promises';
 import path from 'path';
 import os from 'os';
-import { MemoryAdapter } from '../adapters/secondary/MemoryAdapter.js';
+import { MemoryAdapter } from '../../../adapters/secondary/MemoryAdapter.js';
 
 describe('MemoryAdapter', () => {
   let memoryAdapter;

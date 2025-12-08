@@ -1,4 +1,4 @@
-import { ReceiptDataExtractor } from '../domain/services/ReceiptDataExtractor.js';
+import { ReceiptDataExtractor } from '../../../domain/services/ReceiptDataExtractor.js';
 
 describe('ReceiptDataExtractor', () => {
   let extractor;

@@ -1,5 +1,5 @@
 import { jest } from '@jest/globals';
-import { RestoreUseCase } from '../application/RestoreUseCase.js';
+import { RestoreUseCase } from '../../application/RestoreUseCase.js';
 
 describe('RestoreUseCase', () => {
   let useCase;

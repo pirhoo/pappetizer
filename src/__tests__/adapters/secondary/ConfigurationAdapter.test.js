@@ -1,8 +1,8 @@
 import fs from 'fs/promises';
 import path from 'path';
 import os from 'os';
-import { ConfigurationAdapter } from '../adapters/secondary/ConfigurationAdapter.js';
-import { Configuration } from '../domain/entities/Configuration.js';
+import { ConfigurationAdapter } from '../../../adapters/secondary/ConfigurationAdapter.js';
+import { Configuration } from '../../../domain/entities/Configuration.js';
 
 describe('ConfigurationAdapter', () => {
   let adapter;
