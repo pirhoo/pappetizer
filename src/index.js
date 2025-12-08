@@ -19,7 +19,28 @@ import {
   symbols,
   badge,
   timestamp,
+  showCursor,
 } from './adapters/primary/ui.js';
+
+// Ensure cursor is restored on exit or interrupt
+const restoreCursor = () => {
+  showCursor();
+};
+
+process.on('exit', restoreCursor);
+process.on('SIGINT', () => {
+  restoreCursor();
+  process.exit(130);
+});
+process.on('SIGTERM', () => {
+  restoreCursor();
+  process.exit(143);
+});
+process.on('uncaughtException', (err) => {
+  restoreCursor();
+  console.error(err);
+  process.exit(1);
+});
 
 const program = new Command();
 

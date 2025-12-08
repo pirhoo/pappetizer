@@ -5,8 +5,8 @@ import {
   symbols,
   box,
   keyValue,
-  createSpinner,
   divider,
+  progressBar,
 } from './ui.js';
 
 /**
@@ -16,6 +16,7 @@ export class UserPromptAdapter extends UserPromptPort {
   constructor() {
     super();
     this.spinner = null;
+    this.progress = null;
   }
 
   /**
@@ -26,6 +27,9 @@ export class UserPromptAdapter extends UserPromptPort {
    * @returns {Promise<{action: string, customName?: string, editedFields?: object}>}
    */
   async promptForRename(originalName, suggestedName, extractedData = {}) {
+    // Hide progress bar before showing prompt
+    this.hideProgress();
+
     const dateVal = this.formatDateForDisplay(extractedData.date);
     const vendorVal = extractedData.vendor;
     const amountVal = extractedData.amount != null ? extractedData.amount.toFixed(2) : null;
@@ -242,6 +246,9 @@ export class UserPromptAdapter extends UserPromptPort {
    * @returns {Promise<object>} - Configuration answers
    */
   async promptConfiguration(currentConfig) {
+    // Hide progress bar before prompting
+    this.hideProgress();
+
     console.log('');
     console.log(`  ${c.bold}${c.cyan}Configuration Wizard${c.reset}`);
     console.log(`  ${c.dim}Configure pappetizer settings${c.reset}`);
@@ -450,11 +457,161 @@ export class UserPromptAdapter extends UserPromptPort {
   }
 
   /**
-   * Start a spinner
+   * Start a spinner with progress bar support
    * @param {string} text - Spinner text
    */
   startSpinner(text) {
-    this.spinner = createSpinner(text);
+    // Clear any existing progress bar
+    this.clearProgressBar();
+
+    // Create a spinner that includes the progress bar in its render cycle
+    const adapter = this;
+    let frameIndex = 0;
+    let interval = null;
+    let currentText = text;
+    let firstRender = true;
+    let hasProgressLines = false;
+
+    // Cache for progress bar to avoid rebuilding when unchanged
+    let cachedProgressCurrent = -1;
+    let cachedProgressTotal = -1;
+    let cachedProgressLine = '';
+
+    // Fixed-width padding to overwrite previous content without clearing
+    const LINE_WIDTH = 80;
+    const pad = (str, width = LINE_WIDTH) => {
+      // eslint-disable-next-line no-control-regex
+      const len = str.replace(/\x1b\[[0-9;]*m/g, '').length;
+      return str + ' '.repeat(Math.max(0, width - len));
+    };
+
+    // Pre-compute static elements
+    const separatorLine = pad(`  ${c.dim}${symbols.boxHorizontal.repeat(45)}${c.reset}`);
+
+    // Get progress line (cached when values unchanged)
+    const getProgressLine = () => {
+      if (!adapter.progress) return '';
+      const { current, total } = adapter.progress;
+      if (current !== cachedProgressCurrent || total !== cachedProgressTotal) {
+        cachedProgressCurrent = current;
+        cachedProgressTotal = total;
+        const bar = progressBar(current, total, {
+          width: 25,
+          showPercent: true,
+          showCount: true,
+        });
+        cachedProgressLine = pad(`  ${c.cyan}${symbols.info}${c.reset} Progress ${bar}`);
+      }
+      return cachedProgressLine;
+    };
+
+    const render = () => {
+      const frame = symbols.spinner[frameIndex];
+
+      // Build spinner line (padded to overwrite any previous content)
+      const spinnerLine = pad(`  ${c.cyan}${frame}${c.reset} ${currentText}`);
+
+      let output = '';
+
+      if (firstRender) {
+        // First render: just write lines normally
+        output = spinnerLine;
+        if (adapter.progress) {
+          output += `\n${separatorLine}`;
+          output += `\n${getProgressLine()}`;
+          output += '\x1b[2A'; // Move back up to spinner line
+          hasProgressLines = true;
+        }
+        firstRender = false;
+      } else {
+        // Subsequent renders: return to start of line and overwrite
+        output = '\r' + spinnerLine;
+        if (adapter.progress) {
+          // Move down, overwrite separator, move down, overwrite progress, move back up
+          output += `\x1b[1B\r${separatorLine}`;
+          output += `\x1b[1B\r${getProgressLine()}`;
+          output += '\x1b[2A'; // Move back up to spinner line
+          hasProgressLines = true;
+        } else if (hasProgressLines) {
+          // Progress was removed, clear the lines below
+          output += '\x1b[1B\r\x1b[K\x1b[1B\r\x1b[K\x1b[2A';
+          hasProgressLines = false;
+        }
+      }
+
+      process.stdout.write(output);
+      frameIndex = (frameIndex + 1) % symbols.spinner.length;
+    };
+
+    this.spinner = {
+      start(newText) {
+        if (newText) currentText = newText;
+        if (interval) return;
+        // Hide cursor during spinner animation
+        process.stdout.write('\x1b[?25l');
+        interval = setInterval(render, 100);
+        render();
+      },
+
+      update(newText) {
+        currentText = newText;
+      },
+
+      stop() {
+        if (interval) {
+          clearInterval(interval);
+          interval = null;
+        }
+        // Show cursor and clear all lines
+        let output = '\x1b[?25h\r\x1b[K';
+        if (hasProgressLines) {
+          output += '\x1b[1B\x1b[K\x1b[1B\x1b[K\x1b[2A';
+          hasProgressLines = false;
+        }
+        if (adapter.progress) {
+          adapter.progress.visible = false;
+        }
+        process.stdout.write(output);
+      },
+
+      success(newText) {
+        this.stop();
+        console.log(`  ${c.green}${symbols.success}${c.reset} ${newText || currentText}`);
+      },
+
+      fail(newText) {
+        this.stop();
+        console.log(`  ${c.red}${symbols.error}${c.reset} ${newText || currentText}`);
+      },
+
+      warn(newText) {
+        this.stop();
+        console.log(`  ${c.yellow}${symbols.warning}${c.reset} ${newText || currentText}`);
+      },
+
+      info(newText) {
+        this.stop();
+        console.log(`  ${c.blue}${symbols.info}${c.reset} ${newText || currentText}`);
+      },
+
+      step(completedText, newText) {
+        // Clear spinner line and progress lines WITHOUT stopping the interval
+        let clearOutput = '\r\x1b[K';
+        if (hasProgressLines) {
+          clearOutput += '\x1b[1B\x1b[K\x1b[1B\x1b[K\x1b[2A';
+          hasProgressLines = false;
+        }
+        process.stdout.write(clearOutput);
+        // Print the completed step
+        console.log(`  ${c.dim}${symbols.success}${c.reset} ${c.dim}${completedText}${c.reset}`);
+        if (newText) {
+          currentText = newText;
+        }
+        // Next render starts fresh on new line
+        firstRender = true;
+      },
+    };
+
     this.spinner.start();
   }
 
@@ -650,5 +807,64 @@ export class UserPromptAdapter extends UserPromptPort {
     });
 
     return shouldMemorize;
+  }
+
+  /**
+   * Start tracking progress
+   * @param {number} total - Total number of items
+   */
+  startProgress(total) {
+    this.progress = { current: 0, total };
+  }
+
+  /**
+   * Update and print progress bar
+   * @param {number} current - Current progress count
+   */
+  updateProgress(current) {
+    if (!this.progress) return;
+    this.progress.current = current;
+  }
+
+  /**
+   * Print the progress bar below current output
+   */
+  printProgressBar() {
+    if (!this.progress) return;
+    const { current, total } = this.progress;
+    const bar = progressBar(current, total, {
+      width: 25,
+      showPercent: true,
+      showCount: true,
+    });
+    console.log(`  ${c.dim}${symbols.boxHorizontal.repeat(45)}${c.reset}`);
+    console.log(`  ${c.cyan}${symbols.info}${c.reset} Progress ${bar}`);
+    this.progress.visible = true;
+  }
+
+  /**
+   * Clear progress bar from screen
+   */
+  clearProgressBar() {
+    if (!this.progress?.visible) return;
+    // First move to column 0 (in case cursor is mid-line from spinner's progress bar)
+    // Then move up 2 lines (separator + progress), then clear to end of screen
+    process.stdout.write('\r\x1b[2A\x1b[0J');
+    this.progress.visible = false;
+  }
+
+  /**
+   * Hide progress bar before prompts
+   */
+  hideProgress() {
+    this.clearProgressBar();
+  }
+
+  /**
+   * Stop tracking progress
+   */
+  stopProgress() {
+    this.clearProgressBar();
+    this.progress = null;
   }
 }

@@ -131,6 +131,9 @@ export function box(content, options = {}) {
 
   const result = [];
 
+  // Clear to end of line escape code - ensures no artifacts remain
+  const clearEOL = '\x1b[K';
+
   // Top border with optional title
   if (title) {
     const titleText = ` ${title} `;
@@ -138,10 +141,10 @@ export function box(content, options = {}) {
     const leftPad = Math.floor((innerWidth - titleLen) / 2);
     const rightPad = innerWidth - titleLen - leftPad;
     result.push(
-      `${borderColor}${symbols.boxTopLeft}${symbols.boxHorizontal.repeat(leftPad)}${c.reset}${titleColor}${titleText}${c.reset}${borderColor}${symbols.boxHorizontal.repeat(rightPad)}${symbols.boxTopRight}${c.reset}`,
+      `${borderColor}${symbols.boxTopLeft}${symbols.boxHorizontal.repeat(leftPad)}${c.reset}${titleColor}${titleText}${c.reset}${borderColor}${symbols.boxHorizontal.repeat(rightPad)}${symbols.boxTopRight}${c.reset}${clearEOL}`,
     );
   } else {
-    result.push(`${borderColor}${symbols.boxTopLeft}${horizontal}${symbols.boxTopRight}${c.reset}`);
+    result.push(`${borderColor}${symbols.boxTopLeft}${horizontal}${symbols.boxTopRight}${c.reset}${clearEOL}`);
   }
 
   // Content lines
@@ -149,12 +152,12 @@ export function box(content, options = {}) {
     const lineLen = stripAnsi(line).length;
     const rightPad = maxLen - lineLen;
     result.push(
-      `${borderColor}${symbols.boxVertical}${c.reset}${paddingStr}${line}${' '.repeat(rightPad)}${paddingStr}${borderColor}${symbols.boxVertical}${c.reset}`,
+      `${borderColor}${symbols.boxVertical}${c.reset}${paddingStr}${line}${' '.repeat(rightPad)}${paddingStr}${borderColor}${symbols.boxVertical}${c.reset}${clearEOL}`,
     );
   }
 
   // Bottom border
-  result.push(`${borderColor}${symbols.boxBottomLeft}${horizontal}${symbols.boxBottomRight}${c.reset}`);
+  result.push(`${borderColor}${symbols.boxBottomLeft}${horizontal}${symbols.boxBottomRight}${c.reset}${clearEOL}`);
 
   return result.join('\n');
 }
@@ -186,7 +189,8 @@ export function createSpinner(text = '') {
 
   const render = () => {
     const frame = symbols.spinner[frameIndex];
-    process.stdout.write(`\r  ${c.cyan}${frame}${c.reset} ${currentText}`);
+    // Clear line first, then render spinner
+    process.stdout.write(`\r\x1b[K  ${c.cyan}${frame}${c.reset} ${currentText}`);
     frameIndex = (frameIndex + 1) % symbols.spinner.length;
   };
 
@@ -207,35 +211,36 @@ export function createSpinner(text = '') {
         clearInterval(interval);
         interval = null;
       }
-      process.stdout.write('\r' + ' '.repeat(stripAnsi(currentText).length + 6) + '\r');
+      // Clear entire line using ANSI escape
+      process.stdout.write('\r\x1b[K');
     },
 
     success(newText) {
       this.stop();
-      console.log(`${c.green}${symbols.success}${c.reset} ${newText || currentText}`);
+      console.log(`  ${c.green}${symbols.success}${c.reset} ${newText || currentText}`);
     },
 
     fail(newText) {
       this.stop();
-      console.log(`${c.red}${symbols.error}${c.reset} ${newText || currentText}`);
+      console.log(`  ${c.red}${symbols.error}${c.reset} ${newText || currentText}`);
     },
 
     warn(newText) {
       this.stop();
-      console.log(`${c.yellow}${symbols.warning}${c.reset} ${newText || currentText}`);
+      console.log(`  ${c.yellow}${symbols.warning}${c.reset} ${newText || currentText}`);
     },
 
     info(newText) {
       this.stop();
-      console.log(`${c.blue}${symbols.info}${c.reset} ${newText || currentText}`);
+      console.log(`  ${c.blue}${symbols.info}${c.reset} ${newText || currentText}`);
     },
 
     /**
      * Show a completed step and continue with new text
      */
     step(completedText, newText) {
-      // Clear current line and show completed step
-      process.stdout.write('\r' + ' '.repeat(stripAnsi(currentText).length + 6) + '\r');
+      // Clear entire line and show completed step
+      process.stdout.write('\r\x1b[K');
       console.log(`  ${c.dim}${symbols.success}${c.reset} ${c.dim}${completedText}${c.reset}`);
       // Update text and continue spinning
       if (newText) {
@@ -436,6 +441,27 @@ export function cursorUp(n = 1) {
 }
 
 /**
+ * Move cursor down n lines
+ */
+export function cursorDown(n = 1) {
+  process.stdout.write(`\x1b[${n}B`);
+}
+
+/**
+ * Save cursor position
+ */
+export function saveCursor() {
+  process.stdout.write('\x1b[s');
+}
+
+/**
+ * Restore cursor position
+ */
+export function restoreCursor() {
+  process.stdout.write('\x1b[u');
+}
+
+/**
  * Hide/show cursor
  */
 export function hideCursor() {
@@ -444,6 +470,37 @@ export function hideCursor() {
 
 export function showCursor() {
   process.stdout.write('\x1b[?25h');
+}
+
+/**
+ * Get terminal dimensions
+ */
+export function getTerminalSize() {
+  return {
+    rows: process.stdout.rows || 24,
+    cols: process.stdout.columns || 80,
+  };
+}
+
+/**
+ * Move cursor to specific row and column (1-indexed)
+ */
+export function moveTo(row, col = 1) {
+  process.stdout.write(`\x1b[${row};${col}H`);
+}
+
+/**
+ * Set scroll region (1-indexed, inclusive)
+ */
+export function setScrollRegion(top, bottom) {
+  process.stdout.write(`\x1b[${top};${bottom}r`);
+}
+
+/**
+ * Reset scroll region to full terminal
+ */
+export function resetScrollRegion() {
+  process.stdout.write('\x1b[r');
 }
 
 // Export default object for convenience
@@ -467,6 +524,13 @@ export default {
   timestamp,
   clearLine,
   cursorUp,
+  cursorDown,
+  saveCursor,
+  restoreCursor,
   hideCursor,
   showCursor,
+  getTerminalSize,
+  moveTo,
+  setScrollRegion,
+  resetScrollRegion,
 };

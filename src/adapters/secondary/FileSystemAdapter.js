@@ -115,4 +115,45 @@ export class FileSystemAdapter extends FileSystemPort {
   async getStats(filePath) {
     return fs.stat(filePath);
   }
+
+  /**
+   * Count files in a directory matching criteria
+   * @param {string} dirPath - Directory to count files in
+   * @param {object} options - Count options
+   * @param {boolean} options.recursive - Whether to recurse into subdirectories
+   * @param {string[]} options.extensions - File extensions to count (e.g., ['.pdf', '.jpg'])
+   * @param {number} options.minSize - Minimum file size in bytes
+   * @returns {Promise<number>} - Number of matching files
+   */
+  async countFiles(dirPath, options = {}) {
+    const { recursive = false, extensions = null, minSize = 0 } = options;
+    let count = 0;
+
+    for await (const filePath of this.walkDirectory(dirPath, { recursive })) {
+      // Check extension if filter provided
+      if (extensions) {
+        const ext = this.getExtension(filePath);
+        if (!extensions.includes(ext)) {
+          continue;
+        }
+      }
+
+      // Check file size if minimum provided
+      if (minSize > 0) {
+        try {
+          const stats = await this.getStats(filePath);
+          if (stats.size < minSize) {
+            continue;
+          }
+        } catch {
+          // Skip files we can't stat
+          continue;
+        }
+      }
+
+      count++;
+    }
+
+    return count;
+  }
 }

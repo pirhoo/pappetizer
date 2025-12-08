@@ -183,6 +183,25 @@ export class RenameReceiptsUseCase {
       return stats;
     }
 
+    // Count files first for progress bar
+    this.userPrompt.startSpinner('Scanning directory...');
+    const totalFiles = await this.fileSystem.countFiles(dirPath, {
+      recursive,
+      extensions: supportedExtensions,
+      minSize: this.config.minFileSize,
+    });
+    this.userPrompt.stopSpinner();
+
+    if (totalFiles === 0) {
+      this.userPrompt.info('No matching files found');
+      return stats;
+    }
+
+    this.userPrompt.info(`Found ${totalFiles} file${totalFiles === 1 ? '' : 's'} to process`);
+    this.userPrompt.startProgress(totalFiles);
+
+    let fileIndex = 0;
+
     try {
       for await (const filePath of this.fileSystem.walkDirectory(dirPath, { recursive })) {
         const ext = this.fileSystem.getExtension(filePath);
@@ -212,12 +231,18 @@ export class RenameReceiptsUseCase {
           acceptAllInDir = null;
         }
 
+        // Update progress counter
+        fileIndex++;
+
         // Check if this file is the result of a previous rename (skip it unless forced)
         if (!force) {
           const isRenameResult = await this.manifest.isRenameResult(currentDir, originalName);
           if (isRenameResult) {
+            this.userPrompt.clearProgressBar();
+            this.userPrompt.updateProgress(fileIndex);
             this.userPrompt.skipped(originalName, 'previously renamed');
             stats.skipped++;
+            this.userPrompt.printProgressBar();
             continue;
           }
         }
@@ -225,20 +250,25 @@ export class RenameReceiptsUseCase {
         // If a file with that name exists, it's either a new file or the renamed file was deleted.
 
         stats.processed++;
+        this.userPrompt.updateProgress(fileIndex);
+        this.userPrompt.clearProgressBar();
         this.userPrompt.log('');
         this.userPrompt.startSpinner(`Extracting data from ${originalName}`);
 
         try {
           const receipt = await this.extractReceiptData(filePath, originalName);
           this.userPrompt.stopSpinner();
+          this.userPrompt.printProgressBar();
 
           this.applyVendorMemory(receipt);
 
           const suggestedName = receipt.generateFilename(this.getFilenameConfig());
 
           if (suggestedName === originalName) {
+            this.userPrompt.clearProgressBar();
             this.userPrompt.skipped(originalName, 'name unchanged');
             stats.skipped++;
+            this.userPrompt.printProgressBar();
             continue;
           }
 
@@ -249,6 +279,7 @@ export class RenameReceiptsUseCase {
           if (isAutoAccept && meetsConfidenceThreshold) {
             result = { shouldRename: true, finalName: suggestedName, finalReceipt: receipt };
           } else {
+            this.userPrompt.clearProgressBar();
             if (isAutoAccept && !meetsConfidenceThreshold) {
               this.userPrompt.warn(`Low confidence (${(receipt.confidence * 100).toFixed(0)}%) - prompting for review`);
             }
@@ -259,6 +290,7 @@ export class RenameReceiptsUseCase {
 
             if (result.shouldSkip) {
               stats.skipped++;
+              this.userPrompt.printProgressBar();
               continue;
             }
             if (result.setAcceptAll) {
@@ -267,6 +299,7 @@ export class RenameReceiptsUseCase {
           }
 
           if (result.shouldRename) {
+            this.userPrompt.clearProgressBar();
             const renameResult = await this.performRename(
               filePath, result.finalName, result.finalReceipt, originalName, currentDir, dryRun,
             );
@@ -277,14 +310,18 @@ export class RenameReceiptsUseCase {
               stats.errors.push(`${originalName}: target exists`);
             }
           }
+          this.userPrompt.printProgressBar();
         } catch (error) {
           this.userPrompt.stopSpinner();
+          this.userPrompt.clearProgressBar();
           this.userPrompt.error(`Error processing ${originalName}: ${error.message}`);
           stats.errors.push(`${originalName}: ${error.message}`);
+          this.userPrompt.printProgressBar();
         }
       }
     } finally {
       await this.ocr.terminate();
+      this.userPrompt.stopProgress();
     }
 
     return stats;
