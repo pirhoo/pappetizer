@@ -27,7 +27,7 @@
   "license": "MIT",
   "dependencies": {
     "@anthropic-ai/sdk": "^0.71.2",
-    "@inquirer/prompts": "^8.0.2",
+    "@inquirer/prompts": "^7.10.1",
     "commander": "^12.1.0",
     "currency-codes": "^2.2.0",
     "date-fns": "^4.1.0",
