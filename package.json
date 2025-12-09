@@ -28,14 +28,17 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.71.2",
     "@inquirer/prompts": "^7.10.1",
+    "ansi-escapes": "^7.2.0",
     "commander": "^12.1.0",
     "currency-codes": "^2.2.0",
     "date-fns": "^4.1.0",
+    "figures": "^6.1.0",
     "i18n-iso-countries": "^7.14.0",
     "inquirer": "^9.2.23",
     "pdf-parse": "^1.1.1",
     "pdf-to-img": "^5.0.0",
     "sharp": "^0.33.5",
+    "strip-ansi": "^7.1.2",
     "tesseract.js": "^5.1.0"
   },
   "devDependencies": {

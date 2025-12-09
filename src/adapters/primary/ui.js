@@ -1,12 +1,16 @@
 /**
- * Modern CLI UI components inspired by Claude CLI
+ * Modern CLI UI components
+ * Uses third-party libraries for cross-platform compatibility
  */
 
-// ANSI escape codes
+import figures from 'figures';
+import stripAnsiLib from 'strip-ansi';
+import ansiEscapes from 'ansi-escapes';
+
+// ANSI color codes - kept as raw strings for template literal composition
 const ESC = '\x1b';
 const CSI = `${ESC}[`;
 
-// Colors
 export const colors = {
   // Reset
   reset: `${CSI}0m`,
@@ -52,55 +56,60 @@ export const colors = {
 // Shorthand
 const c = colors;
 
-// Unicode symbols
+// Unicode symbols - using figures for cross-platform compatibility
 export const symbols = {
   // Status
-  success: '✓',
-  error: '✗',
-  warning: '⚠',
-  info: '●',
+  success: figures.tick,
+  error: figures.cross,
+  warning: figures.warning,
+  info: figures.bullet, // Using bullet (●) instead of figures.info (ℹ) to match original
 
   // Arrows
-  arrowRight: '→',
-  arrowLeft: '←',
-  arrowUp: '↑',
-  arrowDown: '↓',
+  arrowRight: figures.arrowRight,
+  arrowLeft: figures.arrowLeft,
+  arrowUp: figures.arrowUp,
+  arrowDown: figures.arrowDown,
 
   // Shapes
-  bullet: '•',
-  dot: '·',
-  ellipsis: '…',
+  bullet: figures.bullet,
+  dot: '·', // figures.dot is different (․)
+  ellipsis: figures.ellipsis,
 
-  // Box drawing
-  boxTopLeft: '╭',
-  boxTopRight: '╮',
-  boxBottomLeft: '╰',
-  boxBottomRight: '╯',
-  boxHorizontal: '─',
-  boxVertical: '│',
+  // Box drawing (using figures' line drawing characters)
+  boxTopLeft: figures.lineDownRightArc,
+  boxTopRight: figures.lineDownLeftArc,
+  boxBottomLeft: figures.lineUpRightArc,
+  boxBottomRight: figures.lineUpLeftArc,
+  boxHorizontal: figures.line,
+  boxVertical: figures.lineVertical,
 
-  // Spinners
+  // Spinners (not in figures, keep custom)
   spinner: ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'],
 
   // Misc
-  pointer: '❯',
-  check: '✔',
-  cross: '✖',
-  star: '★',
-  heart: '♥',
-  play: '▶',
-  square: '■',
-  squareSmall: '◼',
-  circle: '●',
-  circleFilled: '◉',
-  circleEmpty: '○',
+  pointer: figures.pointer,
+  check: figures.tick,
+  cross: figures.cross,
+  star: figures.star,
+  heart: figures.heart,
+  play: figures.play,
+  square: figures.squareCenter,
+  squareSmall: figures.squareSmallFilled,
+  circle: figures.bullet,
+  circleFilled: figures.circleFilled,
+  circleEmpty: figures.circle,
 
-  // File types
+  // File types (emojis, not in figures)
   file: '📄',
   folder: '📁',
   image: '🖼',
   pdf: '📑',
 };
+
+/**
+ * Strip ANSI codes from string
+ */
+export const stripAnsi = stripAnsiLib;
 
 /**
  * Style text with color codes
@@ -130,9 +139,7 @@ export function box(content, options = {}) {
   const paddingStr = ' '.repeat(padding);
 
   const result = [];
-
-  // Clear to end of line escape code - ensures no artifacts remain
-  const clearEOL = '\x1b[K';
+  const clearEOL = ansiEscapes.eraseEndLine;
 
   // Top border with optional title
   if (title) {
@@ -163,91 +170,12 @@ export function box(content, options = {}) {
 }
 
 /**
- * Strip ANSI codes from string
- */
-export function stripAnsi(str) {
-  // eslint-disable-next-line no-control-regex
-  return str.replace(/\x1b\[[0-9;]*m/g, '');
-}
-
-/**
  * Truncate text to max length with ellipsis
  */
 export function truncate(text, maxLen) {
   const stripped = stripAnsi(text);
   if (stripped.length <= maxLen) return text;
   return stripped.slice(0, maxLen - 1) + symbols.ellipsis;
-}
-
-/**
- * Create a spinner instance
- */
-export function createSpinner(text = '') {
-  let frameIndex = 0;
-  let interval = null;
-  let currentText = text;
-
-  const render = () => {
-    const frame = symbols.spinner[frameIndex];
-    // Clear line first, then render spinner
-    process.stdout.write(`\r\x1b[K  ${c.cyan}${frame}${c.reset} ${currentText}`);
-    frameIndex = (frameIndex + 1) % symbols.spinner.length;
-  };
-
-  return {
-    start(newText) {
-      if (newText) currentText = newText;
-      if (interval) return;
-      interval = setInterval(render, 80);
-      render();
-    },
-
-    update(newText) {
-      currentText = newText;
-    },
-
-    stop() {
-      if (interval) {
-        clearInterval(interval);
-        interval = null;
-      }
-      // Clear entire line using ANSI escape
-      process.stdout.write('\r\x1b[K');
-    },
-
-    success(newText) {
-      this.stop();
-      console.log(`  ${c.green}${symbols.success}${c.reset} ${newText || currentText}`);
-    },
-
-    fail(newText) {
-      this.stop();
-      console.log(`  ${c.red}${symbols.error}${c.reset} ${newText || currentText}`);
-    },
-
-    warn(newText) {
-      this.stop();
-      console.log(`  ${c.yellow}${symbols.warning}${c.reset} ${newText || currentText}`);
-    },
-
-    info(newText) {
-      this.stop();
-      console.log(`  ${c.blue}${symbols.info}${c.reset} ${newText || currentText}`);
-    },
-
-    /**
-     * Show a completed step and continue with new text
-     */
-    step(completedText, newText) {
-      // Clear entire line and show completed step
-      process.stdout.write('\r\x1b[K');
-      console.log(`  ${c.dim}${symbols.success}${c.reset} ${c.dim}${completedText}${c.reset}`);
-      // Update text and continue spinning
-      if (newText) {
-        currentText = newText;
-      }
-    },
-  };
 }
 
 /**
@@ -426,50 +354,55 @@ export function timestamp() {
   return `${c.dim}${time}${c.reset}`;
 }
 
+// Cursor and terminal control - using ansi-escapes
+
 /**
  * Clear the current line
  */
 export function clearLine() {
-  process.stdout.write('\r\x1b[K');
+  process.stdout.write(ansiEscapes.eraseLine);
 }
 
 /**
  * Move cursor up n lines
  */
 export function cursorUp(n = 1) {
-  process.stdout.write(`\x1b[${n}A`);
+  process.stdout.write(ansiEscapes.cursorUp(n));
 }
 
 /**
  * Move cursor down n lines
  */
 export function cursorDown(n = 1) {
-  process.stdout.write(`\x1b[${n}B`);
+  process.stdout.write(ansiEscapes.cursorDown(n));
 }
 
 /**
  * Save cursor position
  */
 export function saveCursor() {
-  process.stdout.write('\x1b[s');
+  process.stdout.write(ansiEscapes.cursorSavePosition);
 }
 
 /**
  * Restore cursor position
  */
 export function restoreCursor() {
-  process.stdout.write('\x1b[u');
+  process.stdout.write(ansiEscapes.cursorRestorePosition);
 }
 
 /**
- * Hide/show cursor
+ * Hide cursor
  */
 export function hideCursor() {
-  process.stdout.write('\x1b[?25l');
+  process.stdout.write(ansiEscapes.cursorHide);
 }
 
+/**
+ * Show cursor
+ */
 export function showCursor() {
-  process.stdout.write('\x1b[?25h');
+  process.stdout.write(ansiEscapes.cursorShow);
 }
 
 /**
@@ -486,7 +419,8 @@ export function getTerminalSize() {
  * Move cursor to specific row and column (1-indexed)
  */
 export function moveTo(row, col = 1) {
-  process.stdout.write(`\x1b[${row};${col}H`);
+  // ansi-escapes.cursorTo uses 0-indexed (x, y), we use 1-indexed (row, col)
+  process.stdout.write(ansiEscapes.cursorTo(col - 1, row - 1));
 }
 
 /**
@@ -511,7 +445,6 @@ export default {
   box,
   stripAnsi,
   truncate,
-  createSpinner,
   progressBar,
   keyValue,
   table,
