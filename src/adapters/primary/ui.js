@@ -4,59 +4,18 @@
  */
 
 import figures from 'figures';
-import stripAnsiLib from 'strip-ansi';
+import stripAnsi from 'strip-ansi';
 import ansiEscapes from 'ansi-escapes';
 import boxen from 'boxen';
 import cliProgress from 'cli-progress';
+import pc from 'picocolors';
 
-// ANSI color codes - kept as raw strings for template literal composition
-const ESC = '\x1b';
-const CSI = `${ESC}[`;
-
-export const colors = {
-  // Reset
-  reset: `${CSI}0m`,
-
-  // Styles
-  bold: `${CSI}1m`,
-  dim: `${CSI}2m`,
-  italic: `${CSI}3m`,
-  underline: `${CSI}4m`,
-
-  // Foreground colors
-  black: `${CSI}30m`,
-  red: `${CSI}31m`,
-  green: `${CSI}32m`,
-  yellow: `${CSI}33m`,
-  blue: `${CSI}34m`,
-  magenta: `${CSI}35m`,
-  cyan: `${CSI}36m`,
-  white: `${CSI}37m`,
-  gray: `${CSI}90m`,
-
-  // Bright foreground
-  brightRed: `${CSI}91m`,
-  brightGreen: `${CSI}92m`,
-  brightYellow: `${CSI}93m`,
-  brightBlue: `${CSI}94m`,
-  brightMagenta: `${CSI}95m`,
-  brightCyan: `${CSI}96m`,
-  brightWhite: `${CSI}97m`,
-
-  // Background colors
-  bgBlack: `${CSI}40m`,
-  bgRed: `${CSI}41m`,
-  bgGreen: `${CSI}42m`,
-  bgYellow: `${CSI}43m`,
-  bgBlue: `${CSI}44m`,
-  bgMagenta: `${CSI}45m`,
-  bgCyan: `${CSI}46m`,
-  bgWhite: `${CSI}47m`,
-  bgGray: `${CSI}100m`,
-};
+// Re-export picocolors as colors for convenience
+// These are functions: colors.cyan('text') instead of `${colors.cyan}text${colors.reset}`
+export const colors = pc;
 
 // Shorthand
-const c = colors;
+const c = pc;
 
 // Unicode symbols - using figures for cross-platform compatibility
 export const symbols = {
@@ -64,7 +23,7 @@ export const symbols = {
   success: figures.tick,
   error: figures.cross,
   warning: figures.warning,
-  info: figures.bullet, // Using bullet (●) instead of figures.info (ℹ) to match original
+  info: figures.bullet,
 
   // Arrows
   arrowRight: figures.arrowRight,
@@ -74,10 +33,10 @@ export const symbols = {
 
   // Shapes
   bullet: figures.bullet,
-  dot: '·', // figures.dot is different (․)
+  dot: '·',
   ellipsis: figures.ellipsis,
 
-  // Box drawing (using figures' line drawing characters)
+  // Box drawing
   boxTopLeft: figures.lineDownRightArc,
   boxTopRight: figures.lineDownLeftArc,
   boxBottomLeft: figures.lineUpRightArc,
@@ -85,7 +44,7 @@ export const symbols = {
   boxHorizontal: figures.line,
   boxVertical: figures.lineVertical,
 
-  // Spinners (not in figures, keep custom)
+  // Spinners
   spinner: ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'],
 
   // Misc
@@ -101,46 +60,30 @@ export const symbols = {
   circleFilled: figures.circleFilled,
   circleEmpty: figures.circle,
 
-  // File types (emojis, not in figures)
+  // File types
   file: '📄',
   folder: '📁',
   image: '🖼',
   pdf: '📑',
 };
 
-/**
- * Strip ANSI codes from string
- */
-export const stripAnsi = stripAnsiLib;
-
-/**
- * Style text with color codes
- */
-export function style(text, ...styles) {
-  const codes = styles.join('');
-  return `${codes}${text}${c.reset}`;
-}
+// Re-export stripAnsi
+export { stripAnsi };
 
 /**
  * Create a styled box around text (using boxen)
  */
 export function box(content, options = {}) {
-  const {
-    padding = 1,
-    title = null,
-    titleColor = c.cyan,
-  } = options;
+  const { padding = 1, title = null } = options;
 
-  // Build boxen options
   const boxenOptions = {
     padding,
     borderStyle: 'round',
     dimBorder: true,
   };
 
-  // Add title if provided
   if (title) {
-    boxenOptions.title = `${titleColor}${title}${c.reset}`;
+    boxenOptions.title = c.cyan(title);
     boxenOptions.titleAlignment = 'center';
   }
 
@@ -166,13 +109,11 @@ export function progressBar(current, total, options = {}) {
     incomplete = '░',
     showPercent = true,
     showCount = false,
-    color = c.cyan,
   } = options;
 
   const progress = total > 0 ? current / total : 0;
   const percent = Math.round(progress * 100);
 
-  // Use cli-progress's BarFormat for the bar string
   const barString = cliProgress.Format.BarFormat(progress, {
     barsize: width,
     barCompleteString: complete.repeat(width),
@@ -180,18 +121,17 @@ export function progressBar(current, total, options = {}) {
     barGlue: '',
   });
 
-  // Apply colors to the bar
   const filledLen = Math.round(progress * width);
-  const coloredBar = `${color}${barString.slice(0, filledLen)}${c.dim}${barString.slice(filledLen)}${c.reset}`;
+  const coloredBar = c.cyan(barString.slice(0, filledLen)) + c.dim(barString.slice(filledLen));
 
   let result = coloredBar;
 
   if (showPercent) {
-    result += ` ${c.dim}${percent}%${c.reset}`;
+    result += ' ' + c.dim(`${percent}%`);
   }
 
   if (showCount) {
-    result += ` ${c.dim}(${current}/${total})${c.reset}`;
+    result += ' ' + c.dim(`(${current}/${total})`);
   }
 
   return result;
@@ -201,31 +141,19 @@ export function progressBar(current, total, options = {}) {
  * Format a key-value pair for display
  */
 export function keyValue(key, value, options = {}) {
-  const {
-    keyWidth = 12,
-    keyColor = c.dim,
-    valueColor = c.reset,
-    separator = '',
-  } = options;
-
+  const { keyWidth = 12, separator = '' } = options;
   const paddedKey = key.padEnd(keyWidth);
-  return `${keyColor}${paddedKey}${c.reset}${separator}${valueColor}${value}${c.reset}`;
+  return c.dim(paddedKey) + separator + value;
 }
 
 /**
  * Create a table from data
  */
 export function table(data, options = {}) {
-  const {
-    headers = null,
-    padding = 2,
-    headerColor = c.bold + c.cyan,
-    borderColor = c.dim,
-  } = options;
+  const { headers = null, padding = 2 } = options;
 
   if (data.length === 0) return '';
 
-  // Calculate column widths
   const columns = Object.keys(data[0]);
   const widths = {};
 
@@ -237,21 +165,18 @@ export function table(data, options = {}) {
 
   const lines = [];
 
-  // Header
   if (headers) {
     const headerLine = columns
-      .map(col => `${headerColor}${(headers[col] || col).padEnd(widths[col])}${c.reset}`)
+      .map(col => c.bold(c.cyan((headers[col] || col).padEnd(widths[col]))))
       .join(' '.repeat(padding));
     lines.push(headerLine);
 
-    // Separator
     const separator = columns
-      .map(col => `${borderColor}${symbols.boxHorizontal.repeat(widths[col])}${c.reset}`)
+      .map(col => c.dim(symbols.boxHorizontal.repeat(widths[col])))
       .join(' '.repeat(padding));
     lines.push(separator);
   }
 
-  // Rows
   for (const row of data) {
     const rowLine = columns
       .map(col => String(row[col] ?? '').padEnd(widths[col]))
@@ -266,9 +191,8 @@ export function table(data, options = {}) {
  * Format a header/banner
  */
 export function header(title, subtitle = null) {
-  const lines = [];
-  lines.push('');
-  lines.push(`  ${c.bold}${c.cyan}${title}${c.reset}${subtitle ? ` ${c.dim}${subtitle}${c.reset}` : ''}`);
+  const lines = [''];
+  lines.push('  ' + c.bold(c.cyan(title)) + (subtitle ? ' ' + c.dim(subtitle) : ''));
   lines.push('');
   return lines.join('\n');
 }
@@ -277,29 +201,29 @@ export function header(title, subtitle = null) {
  * Format a section header
  */
 export function section(title) {
-  return `\n${c.bold}${c.white}${title}${c.reset}\n`;
+  return '\n' + c.bold(c.white(title)) + '\n';
 }
 
 /**
  * Format a divider line
  */
 export function divider(width = 50) {
-  return `${c.dim}${symbols.boxHorizontal.repeat(width)}${c.reset}`;
+  return c.dim(symbols.boxHorizontal.repeat(width));
 }
 
 /**
  * Format a list item
  */
 export function listItem(text, options = {}) {
-  const { indent = 2, bullet = symbols.bullet, bulletColor = c.dim } = options;
-  return `${' '.repeat(indent)}${bulletColor}${bullet}${c.reset} ${text}`;
+  const { indent = 2, bullet = symbols.bullet } = options;
+  return ' '.repeat(indent) + c.dim(bullet) + ' ' + text;
 }
 
 /**
  * Format file info
  */
 export function fileInfo(filename, options = {}) {
-  const { showIcon = true, color = c.white } = options;
+  const { showIcon = true } = options;
   const ext = filename.split('.').pop()?.toLowerCase();
 
   let icon = symbols.file;
@@ -309,7 +233,7 @@ export function fileInfo(filename, options = {}) {
     icon = symbols.pdf;
   }
 
-  return showIcon ? `${icon}  ${color}${filename}${c.reset}` : `${color}${filename}${c.reset}`;
+  return showIcon ? `${icon}  ${filename}` : filename;
 }
 
 /**
@@ -317,16 +241,16 @@ export function fileInfo(filename, options = {}) {
  */
 export function badge(text, type = 'default') {
   const styles = {
-    default: { bg: c.bgGray, fg: c.white },
-    success: { bg: c.bgGreen, fg: c.black },
-    error: { bg: c.bgRed, fg: c.white },
-    warning: { bg: c.bgYellow, fg: c.black },
-    info: { bg: c.bgBlue, fg: c.white },
-    primary: { bg: c.bgCyan, fg: c.black },
+    default: (t) => c.bgBlack(c.white(c.bold(` ${t} `))),
+    success: (t) => c.bgGreen(c.black(c.bold(` ${t} `))),
+    error: (t) => c.bgRed(c.white(c.bold(` ${t} `))),
+    warning: (t) => c.bgYellow(c.black(c.bold(` ${t} `))),
+    info: (t) => c.bgBlue(c.white(c.bold(` ${t} `))),
+    primary: (t) => c.bgCyan(c.black(c.bold(` ${t} `))),
   };
 
-  const s = styles[type] || styles.default;
-  return `${s.bg}${s.fg}${c.bold} ${text} ${c.reset}`;
+  const styleFn = styles[type] || styles.default;
+  return styleFn(text);
 }
 
 /**
@@ -340,63 +264,39 @@ export function timestamp() {
     minute: '2-digit',
     second: '2-digit',
   });
-  return `${c.dim}${time}${c.reset}`;
+  return c.dim(time);
 }
 
 // Cursor and terminal control - using ansi-escapes
 
-/**
- * Clear the current line
- */
 export function clearLine() {
   process.stdout.write(ansiEscapes.eraseLine);
 }
 
-/**
- * Move cursor up n lines
- */
 export function cursorUp(n = 1) {
   process.stdout.write(ansiEscapes.cursorUp(n));
 }
 
-/**
- * Move cursor down n lines
- */
 export function cursorDown(n = 1) {
   process.stdout.write(ansiEscapes.cursorDown(n));
 }
 
-/**
- * Save cursor position
- */
 export function saveCursor() {
   process.stdout.write(ansiEscapes.cursorSavePosition);
 }
 
-/**
- * Restore cursor position
- */
 export function restoreCursor() {
   process.stdout.write(ansiEscapes.cursorRestorePosition);
 }
 
-/**
- * Hide cursor
- */
 export function hideCursor() {
   process.stdout.write(ansiEscapes.cursorHide);
 }
 
-/**
- * Show cursor
- */
 export function showCursor() {
   process.stdout.write(ansiEscapes.cursorShow);
 }
 
-/**
- * Get terminal dimensions
- */
 export function getTerminalSize() {
   return {
     rows: process.stdout.rows || 24,
@@ -404,24 +304,14 @@ export function getTerminalSize() {
   };
 }
 
-/**
- * Move cursor to specific row and column (1-indexed)
- */
 export function moveTo(row, col = 1) {
-  // ansi-escapes.cursorTo uses 0-indexed (x, y), we use 1-indexed (row, col)
   process.stdout.write(ansiEscapes.cursorTo(col - 1, row - 1));
 }
 
-/**
- * Set scroll region (1-indexed, inclusive)
- */
 export function setScrollRegion(top, bottom) {
   process.stdout.write(`\x1b[${top};${bottom}r`);
 }
 
-/**
- * Reset scroll region to full terminal
- */
 export function resetScrollRegion() {
   process.stdout.write('\x1b[r');
 }
@@ -430,7 +320,6 @@ export function resetScrollRegion() {
 export default {
   colors,
   symbols,
-  style,
   box,
   stripAnsi,
   truncate,
