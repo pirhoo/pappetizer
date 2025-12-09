@@ -22,6 +22,8 @@ import {
   timestamp,
   showCursor,
   box,
+  clearLine,
+  cursorUp,
 } from './adapters/primary/ui.js';
 
 // Load package.json for app info
@@ -352,19 +354,32 @@ program
 
         // Watch mode
         if (options.watch) {
-          console.log('  ' + c.cyan(symbols.info) + ' Watching for new files...');
-          console.log('  ' + c.dim('Press Ctrl+C to stop'));
-          console.log('');
-
           const watchOptions = { recursive: options.recursive };
           let debounceTimers = new Map();
           let isProcessing = false;
           const pendingFiles = new Set();
 
+          const printWatchingMessage = () => {
+            console.log('');
+            console.log('  ' + c.cyan(symbols.info) + ' Watching for new files...');
+            console.log('  ' + c.dim('Press Ctrl+C to stop'));
+            console.log('');
+          };
+
+          // Show initial message
+          printWatchingMessage();
+
           const processNextFile = async () => {
             if (isProcessing || pendingFiles.size === 0) return;
 
             isProcessing = true;
+
+            // Clear the watching message before processing
+            cursorUp(4);
+            for (let i = 0; i < 4; i++) {
+              clearLine();
+              if (i < 3) cursorUp(1);
+            }
 
             while (pendingFiles.size > 0) {
               const filePath = pendingFiles.values().next().value;
@@ -385,9 +400,7 @@ program
             }
 
             isProcessing = false;
-            console.log('');
-            console.log('  ' + c.cyan(symbols.info) + ' Watching for new files...');
-            console.log('');
+            printWatchingMessage();
           };
 
           const watcher = fs.watch(resolvedPath, watchOptions, (eventType, filename) => {
@@ -404,6 +417,17 @@ program
 
             const timer = setTimeout(async () => {
               debounceTimers.delete(filePath);
+
+              // Skip if file no longer exists (was renamed/deleted)
+              if (!fs.existsSync(filePath)) return;
+
+              // Skip files that are results of previous renames
+              const fileDir = path.dirname(filePath);
+              const baseName = path.basename(filePath);
+              manifestAdapter.clearCache();
+              const isRenameResult = await manifestAdapter.isRenameResult(fileDir, baseName);
+              if (isRenameResult) return;
+
               pendingFiles.add(filePath);
 
               try {
