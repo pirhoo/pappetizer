@@ -6,6 +6,8 @@
 import figures from 'figures';
 import stripAnsiLib from 'strip-ansi';
 import ansiEscapes from 'ansi-escapes';
+import boxen from 'boxen';
+import cliProgress from 'cli-progress';
 
 // ANSI color codes - kept as raw strings for template literal composition
 const ESC = '\x1b';
@@ -120,53 +122,29 @@ export function style(text, ...styles) {
 }
 
 /**
- * Create a styled box around text
+ * Create a styled box around text (using boxen)
  */
 export function box(content, options = {}) {
   const {
     padding = 1,
-    borderColor = c.dim,
     title = null,
     titleColor = c.cyan,
-    width = null,
   } = options;
 
-  const lines = content.split('\n');
-  const maxLen = width || Math.max(...lines.map(l => stripAnsi(l).length));
-  const innerWidth = maxLen + padding * 2;
+  // Build boxen options
+  const boxenOptions = {
+    padding,
+    borderStyle: 'round',
+    dimBorder: true,
+  };
 
-  const horizontal = symbols.boxHorizontal.repeat(innerWidth);
-  const paddingStr = ' '.repeat(padding);
-
-  const result = [];
-  const clearEOL = ansiEscapes.eraseEndLine;
-
-  // Top border with optional title
+  // Add title if provided
   if (title) {
-    const titleText = ` ${title} `;
-    const titleLen = stripAnsi(titleText).length;
-    const leftPad = Math.floor((innerWidth - titleLen) / 2);
-    const rightPad = innerWidth - titleLen - leftPad;
-    result.push(
-      `${borderColor}${symbols.boxTopLeft}${symbols.boxHorizontal.repeat(leftPad)}${c.reset}${titleColor}${titleText}${c.reset}${borderColor}${symbols.boxHorizontal.repeat(rightPad)}${symbols.boxTopRight}${c.reset}${clearEOL}`,
-    );
-  } else {
-    result.push(`${borderColor}${symbols.boxTopLeft}${horizontal}${symbols.boxTopRight}${c.reset}${clearEOL}`);
+    boxenOptions.title = `${titleColor}${title}${c.reset}`;
+    boxenOptions.titleAlignment = 'center';
   }
 
-  // Content lines
-  for (const line of lines) {
-    const lineLen = stripAnsi(line).length;
-    const rightPad = maxLen - lineLen;
-    result.push(
-      `${borderColor}${symbols.boxVertical}${c.reset}${paddingStr}${line}${' '.repeat(rightPad)}${paddingStr}${borderColor}${symbols.boxVertical}${c.reset}${clearEOL}`,
-    );
-  }
-
-  // Bottom border
-  result.push(`${borderColor}${symbols.boxBottomLeft}${horizontal}${symbols.boxBottomRight}${c.reset}${clearEOL}`);
-
-  return result.join('\n');
+  return boxen(content, boxenOptions);
 }
 
 /**
@@ -179,7 +157,7 @@ export function truncate(text, maxLen) {
 }
 
 /**
- * Create a progress bar
+ * Create a progress bar (using cli-progress Format)
  */
 export function progressBar(current, total, options = {}) {
   const {
@@ -191,21 +169,32 @@ export function progressBar(current, total, options = {}) {
     color = c.cyan,
   } = options;
 
-  const percent = Math.round((current / total) * 100);
-  const filledLen = Math.round((current / total) * width);
-  const emptyLen = width - filledLen;
+  const progress = total > 0 ? current / total : 0;
+  const percent = Math.round(progress * 100);
 
-  let bar = `${color}${complete.repeat(filledLen)}${c.dim}${incomplete.repeat(emptyLen)}${c.reset}`;
+  // Use cli-progress's BarFormat for the bar string
+  const barString = cliProgress.Format.BarFormat(progress, {
+    barsize: width,
+    barCompleteString: complete.repeat(width),
+    barIncompleteString: incomplete.repeat(width),
+    barGlue: '',
+  });
+
+  // Apply colors to the bar
+  const filledLen = Math.round(progress * width);
+  const coloredBar = `${color}${barString.slice(0, filledLen)}${c.dim}${barString.slice(filledLen)}${c.reset}`;
+
+  let result = coloredBar;
 
   if (showPercent) {
-    bar += ` ${c.dim}${percent}%${c.reset}`;
+    result += ` ${c.dim}${percent}%${c.reset}`;
   }
 
   if (showCount) {
-    bar += ` ${c.dim}(${current}/${total})${c.reset}`;
+    result += ` ${c.dim}(${current}/${total})${c.reset}`;
   }
 
-  return bar;
+  return result;
 }
 
 /**
