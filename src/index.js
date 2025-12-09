@@ -50,16 +50,6 @@ const APP_VERSION = '1.0.0';
 const APP_DESCRIPTION = 'Receipt File Renamer';
 
 /**
- * Print the app header
- */
-function printHeader() {
-  console.log('');
-  console.log(`  ${c.bold}${c.cyan}${APP_NAME}${c.reset} ${c.dim}v${APP_VERSION}${c.reset}`);
-  console.log(`  ${c.dim}${APP_DESCRIPTION}${c.reset}`);
-  console.log('');
-}
-
-/**
  * Resolve and validate a path, exiting on error
  * @returns {{ resolvedPath: string, isFile: boolean }}
  */
@@ -160,8 +150,6 @@ program
     const configAdapter = new ConfigurationAdapter();
     const promptAdapter = new UserPromptAdapter();
 
-    printHeader();
-
     const useCase = new ConfigureUseCase({
       configAdapter,
       promptAdapter,
@@ -186,7 +174,6 @@ program
   .option('-y, --yes', 'Auto-accept all restorations without prompting')
   .action(async (targetPath, options) => {
     const userPrompt = new UserPromptAdapter();
-    printHeader();
 
     const { resolvedPath, isFile } = resolveAndValidatePath(targetPath, userPrompt);
 
@@ -255,7 +242,6 @@ program
   .option('-f, --force', 'Re-process files even if already in manifest')
   .action(async (targetPath, options) => {
     const userPrompt = new UserPromptAdapter();
-    printHeader();
 
     const { resolvedPath, isFile } = resolveAndValidatePath(targetPath, userPrompt);
 
