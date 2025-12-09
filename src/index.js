@@ -56,7 +56,6 @@ const program = new Command();
 
 /**
  * Resolve and validate a path, exiting on error
- * @returns {{ resolvedPath: string, isFile: boolean }}
  */
 function resolveAndValidatePath(targetPath, userPrompt) {
   const resolvedPath = path.resolve(targetPath);
@@ -70,18 +69,14 @@ function resolveAndValidatePath(targetPath, userPrompt) {
     process.exit(1);
   }
 
-  console.log(`  ${c.dim}${isFile ? 'File' : 'Directory'}${c.reset}  ${resolvedPath}`);
+  console.log('  ' + c.dim(isFile ? 'File' : 'Directory') + '  ' + resolvedPath);
   console.log('');
 
   return { resolvedPath, isFile };
 }
 
 /**
- * Print stats summary (works for both clean and restore)
- * @param {object} stats - Stats object with counts and errors
- * @param {object} options - Display options
- * @param {string} options.primaryLabel - Label for primary stat (e.g., 'Renamed', 'Restored')
- * @param {string} options.primaryKey - Key in stats for primary count
+ * Print stats summary
  */
 function printStats(stats, options = {}) {
   const {
@@ -92,27 +87,27 @@ function printStats(stats, options = {}) {
   } = options;
 
   console.log('');
-  console.log(`  ${c.bold}Summary${c.reset}`);
+  console.log('  ' + c.bold('Summary'));
   console.log('');
 
   const statsLine = [];
   if (showProcessed && stats.processed !== undefined) {
-    statsLine.push(`${c.dim}Processed${c.reset} ${c.bold}${stats.processed}${c.reset}`);
+    statsLine.push(c.dim('Processed') + ' ' + c.bold(String(stats.processed)));
   }
-  statsLine.push(`${c.green}${primaryLabel}${c.reset} ${c.bold}${stats[primaryKey]}${c.reset}`);
-  statsLine.push(`${c.dim}Skipped${c.reset} ${stats.skipped}`);
+  statsLine.push(c.green(primaryLabel) + ' ' + c.bold(String(stats[primaryKey])));
+  statsLine.push(c.dim('Skipped') + ' ' + stats.skipped);
 
   if (stats.errors.length > 0) {
-    statsLine.push(`${c.red}Errors${c.reset} ${stats.errors.length}`);
+    statsLine.push(c.red('Errors') + ' ' + stats.errors.length);
   }
 
-  console.log(`  ${statsLine.join(`  ${c.dim}│${c.reset}  `)}`);
+  console.log('  ' + statsLine.join('  ' + c.dim('│') + '  '));
 
   if (stats.errors.length > 0 && verbose) {
     console.log('');
-    console.log(`  ${c.bold}${c.red}Errors${c.reset}`);
+    console.log('  ' + c.bold(c.red('Errors')));
     for (const error of stats.errors) {
-      console.log(`  ${c.red}${symbols.error}${c.reset} ${error}`);
+      console.log('  ' + c.red(symbols.error) + ' ' + error);
     }
   }
 
@@ -136,7 +131,7 @@ function printFlags(flags) {
   if (flags.force) activeFlags.push(badge('FORCE', 'warning'));
 
   if (activeFlags.length > 0) {
-    console.log(`  ${activeFlags.join(' ')}`);
+    console.log('  ' + activeFlags.join(' '));
     console.log('');
   }
 }
@@ -209,8 +204,8 @@ program
         }
         console.log('');
         console.log(result.restored
-          ? `  ${c.green}${symbols.success}${c.reset} File restored successfully`
-          : `  ${c.dim}No changes made${c.reset}`);
+          ? '  ' + c.green(symbols.success) + ' File restored successfully'
+          : '  ' + c.dim('No changes made'));
         console.log('');
       } else {
         const stats = await useCase.execute(resolvedPath, executeOptions);
@@ -262,10 +257,10 @@ program
       useLlm = false;
     }
 
-    // Determine LLM provider (CLI options override config)
+    // Determine LLM provider
     const llmProvider = options.llmProvider || configuration.llmProvider || 'anthropic';
 
-    // Determine API key based on provider
+    // Determine API key
     let apiKey = options.apiKey;
     if (!apiKey) {
       if (llmProvider === 'anthropic') {
@@ -292,10 +287,7 @@ program
       });
 
       if (!llmAdapter || !llmAdapter.isAvailable()) {
-        if (llmProvider === 'ollama') {
-          // Ollama doesn't require API key, just host
-          // Adapter will fail gracefully if server unavailable
-        } else {
+        if (llmProvider !== 'ollama') {
           userPrompt.warn(`LLM requested but no API key provided for ${llmProvider}. Using heuristics.`);
           llmAdapter = null;
         }
@@ -343,7 +335,6 @@ program
       const useCase = createUseCase();
 
       if (isFile) {
-        // Process single file
         if (options.watch) {
           userPrompt.warn('Watch mode is not available for single files.');
         }
@@ -356,14 +347,13 @@ program
         };
         printStats(stats, { verbose: options.verbose });
       } else {
-        // Process directory
         const stats = await useCase.execute(resolvedPath, executeOptions);
         printStats(stats, { verbose: options.verbose });
 
-        // Watch mode (only for directories)
+        // Watch mode
         if (options.watch) {
-          console.log(`  ${c.cyan}${symbols.info}${c.reset} Watching for new files...`);
-          console.log(`  ${c.dim}Press Ctrl+C to stop${c.reset}`);
+          console.log('  ' + c.cyan(symbols.info) + ' Watching for new files...');
+          console.log('  ' + c.dim('Press Ctrl+C to stop'));
           console.log('');
 
           const watchOptions = { recursive: options.recursive };
@@ -380,12 +370,10 @@ program
               const filePath = pendingFiles.values().next().value;
               pendingFiles.delete(filePath);
 
-              // Check if file still exists (might have been moved/deleted)
               if (!fs.existsSync(filePath)) continue;
 
-              console.log(`  ${timestamp()} ${c.cyan}${symbols.arrowRight}${c.reset} ${path.basename(filePath)}`);
+              console.log('  ' + timestamp() + ' ' + c.cyan(symbols.arrowRight) + ' ' + path.basename(filePath));
 
-              // Clear manifest cache to pick up any changes
               manifestAdapter.clearCache();
 
               const watchUseCase = createUseCase();
@@ -398,7 +386,7 @@ program
 
             isProcessing = false;
             console.log('');
-            console.log(`  ${c.cyan}${symbols.info}${c.reset} Watching for new files...`);
+            console.log('  ' + c.cyan(symbols.info) + ' Watching for new files...');
             console.log('');
           };
 
@@ -410,12 +398,10 @@ program
 
             const filePath = path.join(resolvedPath, filename);
 
-            // Clear any existing debounce timer for this file
             if (debounceTimers.has(filePath)) {
               clearTimeout(debounceTimers.get(filePath));
             }
 
-            // Debounce to handle multiple events for same file (file being written)
             const timer = setTimeout(async () => {
               debounceTimers.delete(filePath);
               pendingFiles.add(filePath);
@@ -425,7 +411,7 @@ program
               } catch (error) {
                 userPrompt.error(`Watch error: ${error.message}`);
               }
-            }, 1000); // Wait 1 second for file to be fully written
+            }, 1000);
 
             debounceTimers.set(filePath, timer);
           });
@@ -433,12 +419,12 @@ program
           // Handle graceful shutdown
           const cleanup = () => {
             console.log('');
-            console.log(`  ${c.dim}Stopping watcher...${c.reset}`);
+            console.log('  ' + c.dim('Stopping watcher...'));
             watcher.close();
             for (const timer of debounceTimers.values()) {
               clearTimeout(timer);
             }
-            console.log(`  ${c.green}${symbols.success}${c.reset} Done`);
+            console.log('  ' + c.green(symbols.success) + ' Done');
             console.log('');
             process.exit(0);
           };
@@ -446,7 +432,6 @@ program
           process.on('SIGINT', cleanup);
           process.on('SIGTERM', cleanup);
 
-          // Keep process running
           await new Promise(() => {});
         }
       }
@@ -464,7 +449,7 @@ program.configureHelp({
 
 // Custom help output
 program.addHelpText('beforeAll', () => {
-  const header = `${c.bold}${c.cyan}${APP_NAME}${c.reset} ${c.dim}v${APP_VERSION}${c.reset}\n${c.dim}${APP_DESCRIPTION}${c.reset}`;
+  const header = c.bold(c.cyan(APP_NAME)) + ' ' + c.dim('v' + APP_VERSION) + '\n' + c.dim(APP_DESCRIPTION);
   console.log('');
   console.log(box(header, { padding: 1 }));
   return '';
@@ -472,22 +457,22 @@ program.addHelpText('beforeAll', () => {
 
 program.addHelpText('afterAll', () => {
   console.log('');
-  console.log(`  ${c.dim}Examples:${c.reset}`);
-  console.log(`    $ ${APP_NAME} clean ./receipts`);
-  console.log(`    $ ${APP_NAME} clean ./receipt.pdf`);
-  console.log(`    $ ${APP_NAME} clean ./receipts --dry-run`);
-  console.log(`    $ ${APP_NAME} clean ./receipts -r -y`);
-  console.log(`    $ ${APP_NAME} clean ./receipts --watch`);
-  console.log(`    $ ${APP_NAME} clean ./receipts --use-llm --llm-provider openai`);
-  console.log(`    $ ${APP_NAME} clean ./receipts --use-llm --llm-provider ollama --model llama3.2`);
-  console.log(`    $ ${APP_NAME} restore ./receipts`);
-  console.log(`    $ ${APP_NAME} restore ./receipts -y`);
-  console.log(`    $ ${APP_NAME} configure`);
+  console.log('  ' + c.dim('Examples:'));
+  console.log('    $ ' + APP_NAME + ' clean ./receipts');
+  console.log('    $ ' + APP_NAME + ' clean ./receipt.pdf');
+  console.log('    $ ' + APP_NAME + ' clean ./receipts --dry-run');
+  console.log('    $ ' + APP_NAME + ' clean ./receipts -r -y');
+  console.log('    $ ' + APP_NAME + ' clean ./receipts --watch');
+  console.log('    $ ' + APP_NAME + ' clean ./receipts --use-llm --llm-provider openai');
+  console.log('    $ ' + APP_NAME + ' clean ./receipts --use-llm --llm-provider ollama --model llama3.2');
+  console.log('    $ ' + APP_NAME + ' restore ./receipts');
+  console.log('    $ ' + APP_NAME + ' restore ./receipts -y');
+  console.log('    $ ' + APP_NAME + ' configure');
   console.log('');
   return '';
 });
 
-// Default command when no subcommand is provided
+// Default command
 program
   .action(() => {
     program.outputHelp();
