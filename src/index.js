@@ -3,6 +3,7 @@
 import { Command } from 'commander';
 import path from 'path';
 import fs from 'fs';
+import { createRequire } from 'module';
 import { RenameReceiptsUseCase } from './application/RenameReceiptsUseCase.js';
 import { ConfigureUseCase } from './application/ConfigureUseCase.js';
 import { RestoreUseCase } from './application/RestoreUseCase.js';
@@ -20,7 +21,16 @@ import {
   badge,
   timestamp,
   showCursor,
+  box,
 } from './adapters/primary/ui.js';
+
+// Load package.json for app info
+const require = createRequire(import.meta.url);
+const pkg = require('../package.json');
+
+const APP_NAME = pkg.name;
+const APP_VERSION = pkg.version;
+const APP_DESCRIPTION = pkg.description;
 
 // Ensure cursor is restored on exit or interrupt
 const restoreCursor = () => {
@@ -43,11 +53,6 @@ process.on('uncaughtException', (err) => {
 });
 
 const program = new Command();
-
-// App info
-const APP_NAME = 'pappetizer';
-const APP_VERSION = '1.0.0';
-const APP_DESCRIPTION = 'Receipt File Renamer';
 
 /**
  * Resolve and validate a path, exiting on error
@@ -459,9 +464,9 @@ program.configureHelp({
 
 // Custom help output
 program.addHelpText('beforeAll', () => {
+  const header = `${c.bold}${c.cyan}${APP_NAME}${c.reset} ${c.dim}v${APP_VERSION}${c.reset}\n${c.dim}${APP_DESCRIPTION}${c.reset}`;
   console.log('');
-  console.log(`  ${c.bold}${c.cyan}${APP_NAME}${c.reset} ${c.dim}v${APP_VERSION}${c.reset}`);
-  console.log(`  ${c.dim}${APP_DESCRIPTION}${c.reset}`);
+  console.log(box(header, { padding: 1 }));
   return '';
 });
 
