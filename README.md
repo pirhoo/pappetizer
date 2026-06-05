@@ -31,23 +31,26 @@
 
 ## 📦 Installation
 
+Requires Node.js >= 18. OCR is built in (powered by [tesseract.js](https://github.com/naptha/tesseract.js)) — no system dependencies needed.
+
 ```bash
-# Clone the repository
-git clone https://github.com/yourusername/pappetizer.git
+# Install globally
+npm install -g pappetizer
+```
+
+Or run it directly without installing:
+
+```bash
+npx pappetizer clean ~/Documents/receipts
+```
+
+### From source
+
+```bash
+git clone https://github.com/pirhoo/pappetizer.git
 cd pappetizer
-
-# Install dependencies
 npm install
-
-# Install Tesseract OCR (required)
-# macOS
-brew install tesseract
-
-# Ubuntu/Debian
-sudo apt-get install tesseract-ocr
-
-# Link globally (optional)
-npm link
+npm link # link globally (optional)
 ```
 
 ## 🚀 Usage
