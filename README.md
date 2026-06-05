@@ -1,6 +1,17 @@
-# Pappetizer
+<h1 align="center">Pappetizer</h1>
+<p align="center"><strong>A CLI tool to automatically rename receipt files by extracting vendor, date, and amount information using OCR and optional AI-powered extraction.</strong></p>
 
-A CLI tool to automatically rename receipt files by extracting vendor, date, and amount information using OCR and optional AI-powered extraction.
+<div align="center">
+
+|      | Status |
+| ---: | :--- |
+| **CI checks** | [![Github Actions](https://img.shields.io/github/actions/workflow/status/pirhoo/pappetizer/ci.yml?style=flat-square)](https://github.com/pirhoo/pappetizer/actions/workflows/ci.yml) |
+| **Latest version** | [![Latest version](https://img.shields.io/npm/v/pappetizer?style=flat-square&color=success)](https://www.npmjs.com/package/pappetizer) |
+| **Release date** | [![Release date](https://img.shields.io/github/release-date/pirhoo/pappetizer?style=flat-square&color=success)](https://github.com/pirhoo/pappetizer/releases/latest) |
+| **Downloads** | [![Downloads](https://img.shields.io/npm/dm/pappetizer?style=flat-square&color=success)](https://www.npmjs.com/package/pappetizer) |
+| **Open issues** | [![Open issues](https://img.shields.io/github/issues/pirhoo/pappetizer?style=flat-square&color=success)](https://github.com/pirhoo/pappetizer/issues/) |
+
+</div>
 
 ## ✨ Features
 
